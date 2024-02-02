@@ -9,9 +9,11 @@ load_in_8bit: false
 load_in_4bit: true
 strict: false
 
+rl: dpo
 datasets:
-  - path: teknium/OpenHermes-2.5
-    type: sharegpt
+  - path: argilla/ultrafeedback-binarized-preferences
+    split: train
+    type: chatml.argilla
 dataset_prepared_path: last_run_prepared
 val_set_size: 0.0
 output_dir: ./qlora-out
