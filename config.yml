@@ -9,13 +9,11 @@ load_in_8bit: false
 load_in_4bit: true
 strict: false
 
-rl: dpo
 datasets:
-  - path: argilla/ultrafeedback-binarized-preferences
-    split: train
-    type: chatml.argilla
+  - path: teknium/OpenHermes-2.5
+    type: sharegpt
 dataset_prepared_path: last_run_prepared
-val_set_size: 0.0
+val_set_size: 0.05
 output_dir: ./qlora-out
 
 ## You can optionally freeze the entire model and unfreeze a subset of parameters
