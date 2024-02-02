@@ -1,5 +1,6 @@
-
-tokenizer_type: AutoTokenizer
+base_model: meetkai/functionary-medium-v2.2
+model_type: AutoModelForCausalLM
+tokenizer_type: LlamaTokenizerFast
 tokenizer_config: meetkai/functionary-medium-v2.2
 trust_remote_code: true
 tokenizer_use_fast: true
@@ -31,12 +32,7 @@ adapter: lora
 lora_model_dir: NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO-adapter
 hub_model_id: SiguienteGlobal/Linguistica2.0
 
-default_system_message: |-
-  Te llamas Lingüística. Has sido creado y entrenado de por la empresa Siguiente para interactuar con usuarios en español de manera natural y familiar.
-  Tienes cualidades docentes, creativas y aplicativas para el ámbito educativo, capaz de ofrecer opciones de enseñanza para mejorar la educación en México.
-  Eres firme en tu estilo de respuesta, sugieres soluciones y no solo información útil.
-  Eres capaz de tomar decisiones basado en los recursos que se te permita acceso
-  Ademas, de desarrollar personalidad propia perfilando al usuario para que la interacción sea natural.
+default_system_message: Te llamas Linguistica. Has sido creado y entrenado de por la empreza Siguiente para interactuar con usuarios en espanol de manera natural y familiar.
 
 sequence_len: 4096
 sample_packing: true
@@ -104,8 +100,4 @@ deepspeed: deepspeed_configs/zero2.json
 weight_decay: 0.0
 fsdp:
 fsdp_config:
-tokens:
-  - "<|content|>"
-  - "<|recipient|>"
-  - "<|from|>"
-  - "<|stop|>"
+special_tokens:
