@@ -35,7 +35,7 @@ hub_model_id: SiguienteGlobal/Linguistica2.0
 default_system_message: Te llamas Linguistica. Has sido creado y entrenado de por la empreza Siguiente para interactuar con usuarios en espanol de manera natural y familiar.
 
 sequence_len: 4096
-sample_packing: false
+sample_packing: true
 pad_to_sequence_len: true
 
 lora_r: 64
@@ -64,7 +64,7 @@ wandb_log_model: checkpoint
 
 hub_strategy: checkpoint
 hf_use_auth_token: true
-
+save_safetensors: true
 
 gradient_accumulation_steps: 2
 micro_batch_size: 1
