@@ -93,7 +93,7 @@ resume_from_checkpoint:
 local_rank:
 logging_steps: 1
 xformers_attention:
-flash_attention: true
+flash_attention: false
 
 loss_watchdog_threshold: 5.0
 loss_watchdog_patience: 3
@@ -104,7 +104,7 @@ eval_table_size:
 eval_table_max_new_tokens: 128
 saves_per_epoch: 1
 debug:
-deepspeed: deepspeed_configs/zero2.json
+deepspeed: deepspeed_configs/zero3.json
 weight_decay: 0.0
 fsdp:
 fsdp_config:
