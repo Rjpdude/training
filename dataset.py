@@ -1,3 +1,4 @@
+
 import json
 
 from datasets import load_dataset
@@ -7,7 +8,7 @@ def translator():
     return pipeline("translation", model="Helsinki-NLP/opus-mt-en-es")
 
 
-def map_object(obj: dict, func):
+def map_object(obj, func):
     """ Function to map each value in the object through the lambda function """
     if isinstance(obj, str):
         try:
