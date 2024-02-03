@@ -24,5 +24,5 @@ def map_object(obj, func):
 if __name__ == "__main__":
     pipe = translator()
     dataset = load_dataset("teknium/OpenHermes-2.5")["train"]
-    dataset = dataset.map(lambda x: {"messages": map_object(x["conversations"], pipe)}, remove_columns=["conversations"], batched=True)
+    dataset = dataset.map(lambda x: {"conversations": map_object(x["conversations"], pipe)}, batched=True)
     dataset.push_to_hub("SiguienteGlobal/OpenHermes-2.5-es")
