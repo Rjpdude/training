@@ -12,7 +12,7 @@ strict: false
 
 rl: dpo
 datasets:
-  - path: argilla/end2end_textclassification_with_suggestions_and_responses
+  - path: argilla/distilabel-intel-orca-dpo-pairs
     split: train
     type: chatml.argilla
 dataset_prepared_path: last_run_prepared
