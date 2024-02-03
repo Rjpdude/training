@@ -5,7 +5,7 @@ tokenizer_config: meetkai/functionary-medium-v2.2
 trust_remote_code: true
 tokenizer_use_fast: true
 is_mistral_derived_model: true
-resize_token_embeddings_to_32x: true
+
 load_in_8bit: true
 load_in_4bit: false
 strict: false
