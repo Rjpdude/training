@@ -11,12 +11,12 @@ load_in_4bit: true
 strict: false
 rl: dpo
 datasets:
-  - path: argilla/ultrafeedback-binarized-preferences
+  - path: argilla/dpo-mix-7k
     split: train
-    type: chatml.argilla
+    type: chatml.ultra
 chat_template: chatml
 dataset_prepared_path: last_run_prepared
-val_set_size: 0.0
+val_set_size: 0.1
 output_dir: ./qlora-out
 
 ## You can optionally freeze the entire model and unfreeze a subset of parameters
