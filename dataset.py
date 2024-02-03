@@ -15,12 +15,8 @@ capy = load_dataset("argilla/distilabel-capybara-dpo-9k-binarized", split="train
 
 
 def convert(row):
-    copy = dict.copy(row)
-    copy.update(
-        chosen=agent.run(
-            f"Convert the following JSON conversation into spanish while maintaining the JSON structure: {row['chosen']}")
-    )
-    return copy
+    row["chosen"] = agent.run(f"Convert the following JSON conversation into spanish while maintaining the JSON structure: {row['chosen']}")
+    return row
 
 capy.map(convert, batched=True).to_json("converted.json")
 
