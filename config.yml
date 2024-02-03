@@ -84,7 +84,6 @@ optimizer: adamw_bnb_8bit
 lr_scheduler: cosine
 learning_rate: 0.0002
 
-train_on_inputs: false
 group_by_length: false
 bf16: auto
 fp16:
@@ -107,8 +106,9 @@ eval_table_size:
 eval_table_max_new_tokens: 128
 saves_per_epoch: 1
 debug:
-deepspeed: deepspeed_configs/zero3.json
+deepspeed: deepspeed_configs/zero3_bf16.json
 weight_decay: 0.0
-fsdp: true
+fsdp:
 fsdp_config:
+  enabled: true
 special_tokens:
