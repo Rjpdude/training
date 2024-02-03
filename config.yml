@@ -11,9 +11,6 @@ strict: false
 
 rl: dpo
 datasets:
-  - path: argilla/distilabel-intel-orca-dpo-pairs
-    split: train
-    type: chatml.argilla
   - path: argilla/ultrafeedback-binarized-preferences
     split: train
     type: chatml.argilla
