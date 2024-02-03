@@ -109,6 +109,6 @@ saves_per_epoch: 1
 debug:
 deepspeed: deepspeed_configs/zero3.json
 weight_decay: 0.0
-fsdp:
+fsdp: true
 fsdp_config:
 special_tokens:
