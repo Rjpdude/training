@@ -43,7 +43,7 @@ default_system_message: |-
   Eres capaz de tomar decisiones basado en los recursos que se te permita acceso
   Ademas, de desarrollar personalidad propia perfilando al usuario para que la interacción sea natural.
 
-sequence_len: 4096
+sequence_len: 1024
 sample_packing: false
 pad_to_sequence_len: true
 
