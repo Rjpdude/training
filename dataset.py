@@ -8,9 +8,37 @@ model = AutoModelForCausalLM.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral
                                              torch_dtype=torch.bfloat16)
 tokenizer = AutoTokenizer.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO")
 
-agent = LocalAgent(model, tokenizer, chat_prompt_template="Act as a translator to convert inputs in english into outputs of spanish.")
+capy = load_dataset("argilla/distilabel-capybara-dpo-9k-binarized", split="train")
 
-print(agent("hola. como estas?"))
+capy = capy.filter(
+  lambda r: r["rating_chosen"]>=4
+)
+
+capy = capy.map(lambda r: {"messages": len(r["chosen"])}).filter(lambda r: r["messages"]<18)
+
+def chatml_format(example):
+    # get everything except the last message as input
+    prompt = tokenizer.apply_chat_template(example["chosen"][:-1], tokenize=False, add_generation_prompt=True)
+    # get the last assistant responses
+    chosen = example["chosen"][-1]["content"] + "</s>" 
+    rejected = example["rejected"][-1]["content"] + "</s>" 
+
+    return {
+        "prompt": system + prompt,
+        "chosen": chosen,
+        "rejected": rejected,
+    }
+
+
+# Save columns
+original_columns = capy.column_names
+
+# Format dataset
+capy = capy.map(
+    chatml_format,
+    remove_columns=original_columns
+).to_json("transformed.json")
+
 # capy = load_dataset("argilla/distilabel-capybara-dpo-9k-binarized", split="train")
 #
 
