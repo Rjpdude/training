@@ -9,10 +9,6 @@ resize_token_embeddings_to_32x: true
 load_in_8bit: true
 load_in_4bit: false
 strict: false
-
-gpu_memory_limit: 79GiB
-lora_on_cpu: true
-
 rl: dpo
 datasets:
   - path: argilla/ultrafeedback-binarized-preferences
@@ -86,7 +82,7 @@ learning_rate: 0.0002
 
 group_by_length: false
 bf16: auto
-fp16: true
+fp16:
 tf32: false
 
 gradient_checkpointing: true
@@ -106,7 +102,7 @@ eval_table_size:
 eval_table_max_new_tokens: 128
 saves_per_epoch: 1
 debug:
-deepspeed: deepspeed_configs/zero2.json
+deepspeed:
 weight_decay: 0.0
 fsdp:
 fsdp_config:
