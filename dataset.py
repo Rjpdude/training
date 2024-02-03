@@ -17,7 +17,7 @@ def map_object(obj, func):
             raise ValueError("Invalid JSON format")
 
     mapped_obj = {}
-    for key, value in obj.items():
+    for key, value in dict(obj).items():
         mapped_obj[key] = func(value)
     return mapped_obj
 
@@ -25,5 +25,5 @@ def map_object(obj, func):
 if __name__ == "__main__":
     pipe = translator()
     dataset = load_dataset("teknium/OpenHermes-2.5", split="train")
-    dataset = dataset.map(lambda x: dict(messages=map_object(dict(x["conversations"]), pipe)), remove_columns=["conversations"], batched=True)
+    dataset = dataset.map(lambda x: {"messages":map_object(dict(x["conversations"]), pipe)}, remove_columns=["conversations"], batched=True)
     dataset.push_to_hub("SiguienteGlobal/OpenHermes-2.5-es")
