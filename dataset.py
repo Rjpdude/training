@@ -20,7 +20,7 @@ capy = capy.map(lambda r: {"messages": len(r["chosen"])}).filter(lambda r: r["me
 
 
 def chatml_format(example):
-    example["chosen"] = agent.run_prompt_template(f"Translate the following from spanish into a mexican dialect of spanish: {example['chosen']}")
+    example["chosen"] = agent.chat(f"Translate the following from spanish into a mexican dialect of spanish: {example['chosen']}")
     return example
     # system = ""
     # # get everything except the last message as input
