@@ -31,7 +31,7 @@ unfrozen_parameters:
 model_config:
   output_router_logits: true
 
-adapter: qlora
+adapter: peft
 lora_model_dir: NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO-adapter
 hub_model_id: SiguienteGlobal/Linguistica2.0
 
