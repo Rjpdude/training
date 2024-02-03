@@ -72,7 +72,7 @@ wandb_watch:
 wandb_name: siguienteia
 wandb_log_model: checkpoint
 
-hub_strategy: checkpoint
+hub_strategy: end
 hf_use_auth_token: true
 save_safetensors: true
 
@@ -88,7 +88,7 @@ bf16: auto
 fp16:
 tf32: false
 
-gradient_checkpointing: true
+gradient_checkpointing: false
 early_stopping_patience:
 resume_from_checkpoint:
 local_rank:
