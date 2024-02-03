@@ -5,9 +5,9 @@ tokenizer_config: meetkai/functionary-medium-v2.2
 trust_remote_code: true
 tokenizer_use_fast: true
 is_mistral_derived_model: true
-resize_token_embeddings_to_32x: true
-load_in_8bit: true
-load_in_4bit: false
+
+load_in_8bit: false
+load_in_4bit: true
 strict: false
 
 rl: dpo
@@ -16,7 +16,8 @@ datasets:
     split: train
     type: chatml.argilla
 dataset_prepared_path: last_run_prepared
-output_dir: finished
+val_set_size: 0.0
+output_dir: ./qlora-out
 
 ## You can optionally freeze the entire model and unfreeze a subset of parameters
 unfrozen_parameters:
@@ -30,11 +31,11 @@ unfrozen_parameters:
 model_config:
   output_router_logits: true
 
-adapter: peft
+adapter: qlora
 lora_model_dir: NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO-adapter
 hub_model_id: SiguienteGlobal/Linguistica2.0
+train_on_inputs: true
 
-chat_template: func
 default_system_message: |-
   Te llamas Lingüística. Has sido creado y entrenado de por la empresa Siguiente para interactuar con usuarios en español de manera natural y familiar.
   Tienes cualidades docentes, creativas y aplicativas para el ámbito educativo, capaz de ofrecer opciones de enseñanza para mejorar la educación en México.
@@ -45,7 +46,6 @@ default_system_message: |-
 sequence_len: 4096
 sample_packing: false
 pad_to_sequence_len: true
-train_on_inputs: false
 
 lora_r: 64
 lora_alpha: 16
@@ -71,40 +71,40 @@ wandb_watch:
 wandb_name: siguienteia
 wandb_log_model: checkpoint
 
-hub_strategy: end
+hub_strategy: checkpoint
 hf_use_auth_token: true
 save_safetensors: true
 
 gradient_accumulation_steps: 1
 micro_batch_size: 1
-num_epochs: 1
+num_epochs: 4
 optimizer: adamw_bnb_8bit
 lr_scheduler: cosine
 learning_rate: 0.0002
 
 group_by_length: false
 bf16: auto
-fp16: true
-tf32: true
+fp16:
+tf32: false
 
-gradient_checkpointing: false
+gradient_checkpointing: true
 early_stopping_patience:
 resume_from_checkpoint:
 local_rank:
 logging_steps: 1
 xformers_attention:
-flash_attention: false
+flash_attention: true
 
 loss_watchdog_threshold: 5.0
 loss_watchdog_patience: 3
 
 warmup_steps: 10
-eval_steps: 10
+evals_per_epoch: 4
 eval_table_size:
 eval_table_max_new_tokens: 128
 saves_per_epoch: 1
 debug:
-deepspeed: deepspeed_configs/zero3.json
+deepspeed: deepspeed_configs/zero2.json
 weight_decay: 0.0
 fsdp:
 fsdp_config:
