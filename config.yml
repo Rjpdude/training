@@ -84,8 +84,8 @@ learning_rate: 0.0002
 
 group_by_length: false
 bf16: auto
-fp16:
-tf32: false
+fp16: true
+tf32: true
 
 gradient_checkpointing: false
 early_stopping_patience:
