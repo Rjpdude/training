@@ -20,18 +20,20 @@ capy = capy.map(lambda r: {"messages": len(r["chosen"])}).filter(lambda r: r["me
 
 
 def chatml_format(example):
-    system = ""
-    # get everything except the last message as input
-    prompt = tokenizer.apply_chat_template(example["chosen"][:-1], tokenize=False, add_generation_prompt=True)
-    # get the last assistant responses
-    chosen = example["chosen"][-1]["content"] + "</s>"
-    rejected = example["rejected"][-1]["content"] + "</s>"
-
-    return {
-        "prompt": agent.run_prompt_template(f"Translate the following from spanish into a mexican dialect of spanish: {prompt}"),
-        "chosen": agent.run(chosen),
-        "rejected": agent.run(rejected),
-    }
+    example["chosen"] = agent.run_prompt_template(f"Translate the following from spanish into a mexican dialect of spanish: {example['chosen']}")
+    return example
+    # system = ""
+    # # get everything except the last message as input
+    # prompt = tokenizer.apply_chat_template(example["chosen"][:-1], tokenize=False, add_generation_prompt=True)
+    # # get the last assistant responses
+    # chosen = example["chosen"][-1]["content"] + "</s>"
+    # rejected = example["rejected"][-1]["content"] + "</s>"
+    #
+    # return {
+    #     "prompt": agent.run_prompt_template(),
+    #     "chosen": agent.run(chosen),
+    #     "rejected": agent.run(rejected),
+    # }
 
 
 # Save columns
