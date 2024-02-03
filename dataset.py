@@ -2,23 +2,17 @@ import json
 
 import torch
 from datasets import load_dataset
-from transformers import AutoTokenizer, load_tool, AutoModelForCausalLM, LocalAgent
+from transformers import AutoTokenizer, AutoModelForCausalLM, LocalAgent
 
 model = AutoModelForCausalLM.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO", device_map="auto",
                                              torch_dtype=torch.bfloat16)
-# tokenizer = AutoTokenizer.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO",)
+tokenizer = AutoTokenizer.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO")
 
+agent = LocalAgent(model, tokenizer, chat_prompt_template="Act as a translator to convert inputs in english into outputs of spanish.")
 
-tokenizer = AutoTokenizer.from_pretrained("meetkai/functionary-medium-v2.2")
-agent = LocalAgent(model, tokenizer)
-capy = load_dataset("argilla/distilabel-capybara-dpo-9k-binarized", split="train")
-
-
-def convert(row):
-    row["chosen"] = agent.run(f"Convert the following JSON conversation into spanish while maintaining the JSON structure: {row['chosen']}")
-    return row
-
-capy.map(convert, batched=True).to_json("converted.json")
+print(agent("hola. como estas?"))
+# capy = load_dataset("argilla/distilabel-capybara-dpo-9k-binarized", split="train")
+#
 
 # capy = capy.filter(
 #     lambda r: r["rating_chosen"] >= 4
