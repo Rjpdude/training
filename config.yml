@@ -1,6 +1,6 @@
 base_model: meetkai/functionary-medium-v2.2
 model_type: AutoModelForCausalLM
-tokenizer_type: LlamaTokenizerFast
+tokenizer_type: AutoTokenizer
 tokenizer_config: meetkai/functionary-medium-v2.2
 trust_remote_code: true
 tokenizer_use_fast: true
@@ -9,17 +9,22 @@ load_in_8bit: false
 load_in_4bit: true
 strict: false
 
+rl: dpo
 datasets:
-  - path: teknium/OpenHermes-2.5
-    type: sharegpt
-dataset_prepared_path: last_run
-val_set_size: 0.05
-output_dir: ./completed_model
+  - path: argilla/distilabel-intel-orca-dpo-pairs
+    split: train
+    type: chatml.intel
+  - path: argilla/ultrafeedback-binarized-preferences
+    split: train
+    type: chatml.argilla
+dataset_prepared_path: last_run_prepared
+val_set_size: 0.0
+output_dir: ./qlora-out
 
 ## You can optionally freeze the entire model and unfreeze a subset of parameters
 unfrozen_parameters:
-#  - lm_head.*
-#  - model.embed_tokens.*
+ - lm_head.*
+ - model.embed_tokens.*
 #  - model.layers.2[0-9]+.block_sparse_moe.gate.*
 #  - model.layers.2[0-9]+.block_sparse_moe.experts.*
 #  - model.layers.3[0-9]+.block_sparse_moe.gate.*
@@ -30,9 +35,15 @@ model_config:
 
 adapter: qlora
 lora_model_dir: NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO-adapter
-hub_model_id: SiguienteGlobal/Linguistica2.1
+hub_model_id: SiguienteGlobal/Linguistica2.0
+train_on_inputs: true
 
-default_system_message: Te llamas Linguistica. Has sido creado y entrenado de por la empreza Siguiente para interactuar con usuarios en espanol de manera natural y familiar.
+default_system_message: |-
+  Te llamas Lingüística. Has sido creado y entrenado de por la empresa Siguiente para interactuar con usuarios en español de manera natural y familiar.
+  Tienes cualidades docentes, creativas y aplicativas para el ámbito educativo, capaz de ofrecer opciones de enseñanza para mejorar la educación en México.
+  Eres firme en tu estilo de respuesta, sugieres soluciones y no solo información útil.
+  Eres capaz de tomar decisiones basado en los recursos que se te permita acceso
+  Ademas, de desarrollar personalidad propia perfilando al usuario para que la interacción sea natural.
 
 sequence_len: 4096
 sample_packing: false
@@ -43,6 +54,9 @@ lora_alpha: 16
 lora_dropout: 0.05
 lora_target_linear: true
 lora_fan_in_fan_out: false
+lora_modules_to_save:
+  - lm_head
+  - embed_tokens
 lora_target_modules:
   - gate
   - q_proj
@@ -53,14 +67,19 @@ lora_target_modules:
   - w2
   - w3
 
+wandb_project: Linguistica
+wandb_entity:
+wandb_watch:
+wandb_name: siguienteia
+wandb_log_model: checkpoint
 
-hub_strategy: every_save
+hub_strategy: checkpoint
 hf_use_auth_token: true
 save_safetensors: true
 
 gradient_accumulation_steps: 1
 micro_batch_size: 1
-num_epochs: 1
+num_epochs: 4
 optimizer: adamw_bnb_8bit
 lr_scheduler: cosine
 learning_rate: 0.0002
@@ -88,7 +107,7 @@ eval_table_size:
 eval_table_max_new_tokens: 128
 saves_per_epoch: 1
 debug:
-deepspeed: deepspeed_configs/zero2.json
+deepspeed: deepspeed_configs/zero3.json
 weight_decay: 0.0
 fsdp:
 fsdp_config:
