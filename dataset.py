@@ -1,7 +1,8 @@
 import json
 
 from datasets import load_dataset
-from transformers import pipeline
+from transformers import pipeline, AutoModelForCausalLM, AutoTokenizer
+from accelerate import Accelerator
 
 def map_object(obj, func):
     """ Function to map each value in the object through the lambda function """
@@ -30,8 +31,16 @@ def map_row(pipeline):
 
 
 if __name__ == "__main__":
+    accelerator = Accelerator()
+    pipe = pipeline(
+        "text-generation",
+        model=AutoModelForCausalLM.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO", device_map="auto"),
+        tokenizer=AutoTokenizer.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO"),
+        device=accelerator.device,
+        model_kwargs={"prompt":"Translate to spanish"}
+    )
     transform = map_row(
-        pipeline("translation", model="Helsinki-NLP/opus-mt-en-es", max_length=32000)
+        pipe("translation", model="Helsinki-NLP/opus-mt-en-es", max_length=32000)
     )
     def batch_transform(vals):
         try:
