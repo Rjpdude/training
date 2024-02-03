@@ -35,6 +35,7 @@ adapter: qlora
 lora_model_dir: NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO-adapter
 hub_model_id: SiguienteGlobal/Linguistica2.0
 
+chat_template: func
 default_system_message: |-
   Te llamas Lingüística. Has sido creado y entrenado de por la empresa Siguiente para interactuar con usuarios en español de manera natural y familiar.
   Tienes cualidades docentes, creativas y aplicativas para el ámbito educativo, capaz de ofrecer opciones de enseñanza para mejorar la educación en México.
