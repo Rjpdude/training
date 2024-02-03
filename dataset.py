@@ -5,11 +5,11 @@ from datasets import load_dataset
 from transformers import AutoTokenizer, load_tool, AutoModelForCausalLM, LocalAgent
 
 model = AutoModelForCausalLM.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO", device_map="auto", torch_dtype=torch.bfloat16)
-tokenizer = AutoTokenizer.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO")
-agent = LocalAgent(model, tokenizer, run_prompt_template="Act as a translator. Given an input in english, output a contextualized version in a mexican dialect of spanish.")
+# tokenizer = AutoTokenizer.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO",)
 
-translator = load_tool("translation", "Helsinki-NLP/opus-mt-en-es")
+
 tokenizer = AutoTokenizer.from_pretrained("meetkai/functionary-medium-v2.2")
+agent = LocalAgent(model, tokenizer)
 capy = load_dataset("argilla/distilabel-capybara-dpo-9k-binarized", split="train")
 
 capy = capy.filter(
@@ -28,7 +28,7 @@ def chatml_format(example):
     rejected = example["rejected"][-1]["content"] + "</s>"
 
     return {
-        "prompt": agent.run(system + prompt),
+        "prompt": agent.run_prompt_template(f"Translate the following from spanish into a mexican dialect of spanish: {prompt}"),
         "chosen": agent.run(chosen),
         "rejected": agent.run(rejected),
     }
