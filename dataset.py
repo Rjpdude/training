@@ -1,8 +1,8 @@
-
 import json
 
 from datasets import load_dataset
 from transformers import pipeline
+
 
 def translator():
     return pipeline("translation", model="Helsinki-NLP/opus-mt-en-es")
@@ -22,8 +22,16 @@ def map_object(obj, func):
     return mapped_obj
 
 
+def map_row(pipeline):
+    def mapper(row):
+        return dict(
+            conversations=map_object(row, pipeline)
+        )
+
+    return mapper
+
+
 if __name__ == "__main__":
-    pipe = translator()
     dataset = load_dataset("teknium/OpenHermes-2.5", split="train")
-    dataset = dataset.map(lambda x: {"messages":map_object(dict(x["conversations"]), pipe)}, remove_columns=["conversations"], batched=True)
+    dataset = dataset.map(map_row(translator()), batched=True)
     dataset.push_to_hub("SiguienteGlobal/OpenHermes-2.5-es")
