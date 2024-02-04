@@ -4,21 +4,25 @@ from datasets import load_dataset
 from sacremoses import MosesTokenizer, MosesPunctNormalizer
 from accelerate import Accelerator
 
+
 def setup_distributed():
     dist.init_process_group(backend='nccl')
 
+
 def load_dataset_distributed(model, tokenizer):
-    translator = pipeline("translation", model=model, max_length=10200, tokenizer=tokenizer)
-    
+    translator = pipeline("translation", "Helsinki-NLP/opus-mt-en-es")
+
     en = MosesTokenizer(lang='en')
     mpn = MosesPunctNormalizer()
 
     dataset = load_dataset("teknium/OpenHermes-2.5")
     dataset = dataset["train"]
     dataset = dataset.map(
-        lambda col: dict(conversations=[process(chain, translator, en, mpn) for chain in col["conversations"]]), batched=True
+        lambda col: dict(conversations=[process(chain, translator, en, mpn) for chain in col["conversations"]]),
+        batched=True
     )
     return dataset
+
 
 def process(message, translator, en: MosesTokenizer, mpn: MosesPunctNormalizer):
     try:
@@ -32,15 +36,18 @@ def process(message, translator, en: MosesTokenizer, mpn: MosesPunctNormalizer):
     except:
         pass
 
+
 def main():
     accelerator = Accelerator(split_batches=True)
     setup_distributed()
 
-    translator_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-en-es", max_length=10200).to(accelerator.device)
+    translator_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-en-es", max_length=10200).to(
+        accelerator.device)
     translator_tokenizer = AutoTokenizer.from_pretrained("Helsinki-NLP/opus-mt-en-es", max_length=10200)
 
     dataset = load_dataset_distributed(translator_model, translator_tokenizer)
     dataset.push_to_hub("SiguienteGlobal/spanglang")
+
 
 if __name__ == '__main__':
     main()
