@@ -14,7 +14,7 @@ def load_notus(task):
 
 def load_zephyr(task):
     llm = LLM(model="cognitivecomputations/dolphin-2.6-mistral-7b-dpo-laser")
-    return vLLM(model=llm, task=task, max_new_tokens=512, prompt_format="zephyr", tensor_parallel_size=4, trust_remote_code=True)
+    return vLLM(model=llm, max_new_tokens=512, prompt_format="chatlm", tensor_parallel_size=4, dtype="float16", engine_use_ray=True, trust_remote_code=True)
 
 
 def load_openai(task):
