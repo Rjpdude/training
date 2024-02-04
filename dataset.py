@@ -28,8 +28,6 @@ class Source:
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.model = AutoModelForCausalLM.from_pretrained(self.path, device_map="auto", quantization_config=config,
                                                           attn_implementation="flash_attention_2", max_length=4092)
-        self.tokenizer.save_pretrained("./model", push_to_hub="SiguienteGlobal/spanglang-4bit")
-        self.model.save_pretrained("./model", push_to_hub="SiguienteGlobal/spanglang-4bit")
         return self
 
     def generate(self, input):
