@@ -1,25 +1,17 @@
-import torch.distributed as dist
-from transformers import pipeline
+from transformers import MarianMTModel, pipeline, AutoTokenizer
+from transformers.tools.evaluate_agent import translator
 from datasets import load_dataset
 from sacremoses import MosesTokenizer, MosesPunctNormalizer
-from accelerate import Accelerator
+import torch
 
-def load_dataset_distributed(model_id = "Helsinki-NLP/opus-mt-en-es"):
-    translator = pipeline("translation", model_id)
+translator_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-en-es", max_length=10200).to("cuda")
+translator_tokenizer = AutoTokenizer.from_pretrained("Helsinki-NLP/opus-mt-en-es", max_length=10200)
+translator = pipeline("translation", model=translator_model, max_length=10200, tokenizer=translator_tokenizer)
 
-    en = MosesTokenizer(lang='en')
-    mpn = MosesPunctNormalizer()
+en = MosesTokenizer(lang='en')
+mpn = MosesPunctNormalizer()
 
-    dataset = load_dataset("teknium/OpenHermes-2.5")
-    dataset = dataset["train"]
-    dataset = dataset.map(
-        lambda col: dict(conversations=[process(chain, translator, en, mpn) for chain in col["conversations"]]),
-        batched=True
-    )
-    return dataset
-
-
-def process(message, translator, en: MosesTokenizer, mpn: MosesPunctNormalizer):
+def process(message):
     try:
         queue = []
         for chain in message:
@@ -31,16 +23,9 @@ def process(message, translator, en: MosesTokenizer, mpn: MosesPunctNormalizer):
     except:
         pass
 
-
-def main(accelerator):
-    dist.init_process_group(backend='nccl')
-    accelerator.prepare_data_loader(load_dataset_distributed)
-    accelerator.wait_for_everyone()
-    dataset = load_dataset_distributed()
-    accelerator.wait_for_everyone()
-    dataset.push_to_hub("SiguienteGlobal/spanglang")
-
-
-if __name__ == '__main__':
-    accelerator = Accelerator()
-    main(accelerator)
+dataset = load_dataset("teknium/OpenHermes-2.5")
+dataset = dataset["train"]
+dataset = dataset.map(
+    lambda col: dict(conversations=[process(chain) for chain in col["conversations"]]), batched=True
+)
+dataset.push_to_hub("SiguienteGlobal/spanglang")
