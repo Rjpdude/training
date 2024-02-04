@@ -1,23 +1,24 @@
 import torch.distributed as dist
-from transformers import pipeline
+from transformers import MarianMTModel, pipeline, AutoTokenizer
 from datasets import load_dataset
 from sacremoses import MosesTokenizer, MosesPunctNormalizer
 from accelerate import Accelerator
 
-def load_dataset_distributed(model_id):
-    translator = pipeline("translation", model_id)
+def setup_distributed():
+    dist.init_process_group(backend='nccl')
 
+def load_dataset_distributed(model, tokenizer):
+    translator = pipeline("translation", model=model, max_length=10200, tokenizer=tokenizer)
+    
     en = MosesTokenizer(lang='en')
     mpn = MosesPunctNormalizer()
 
     dataset = load_dataset("teknium/OpenHermes-2.5")
     dataset = dataset["train"]
     dataset = dataset.map(
-        lambda col: dict(conversations=[process(chain, translator, en, mpn) for chain in col["conversations"]]),
-        batched=True
+        lambda col: dict(conversations=[process(chain, translator, en, mpn) for chain in col["conversations"]]), batched=True
     )
     return dataset
-
 
 def process(message, translator, en: MosesTokenizer, mpn: MosesPunctNormalizer):
     try:
@@ -31,20 +32,16 @@ def process(message, translator, en: MosesTokenizer, mpn: MosesPunctNormalizer):
     except:
         pass
 
-
 def main():
     accelerator = Accelerator(split_batches=True)
+    accelerator.prepare_data_loader()
+    setup_distributed()
 
-    @accelerator.on_main_process
-    def init():
-        dist.init_process_group(backend='nccl')
+    translator_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-en-es", max_length=10200).to(accelerator.device)
+    translator_tokenizer = AutoTokenizer.from_pretrained("Helsinki-NLP/opus-mt-en-es", max_length=10200)
 
-    init()
-    accelerator.wait_for_everyone()
-    dataset = load_dataset_distributed("Helsinki-NLP/opus-mt-en-es")
-    accelerator.wait_for_everyone()
+    dataset = load_dataset_distributed(translator_model, translator_tokenizer)
     dataset.push_to_hub("SiguienteGlobal/spanglang")
-
 
 if __name__ == '__main__':
     main()
