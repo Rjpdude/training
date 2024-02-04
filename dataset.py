@@ -12,7 +12,7 @@ def map_object(obj, func):
         except json.JSONDecodeError:
             raise ValueError("Invalid JSON format")
     def message(row, pipe):
-        return {"role":"user" if row["from"] == "human" else "assistant", "content":pipe(row["value"])[0]["translation_text"]}
+        return {"role":"user" if row["from"] == "human" else "assistant", "content":pipe(row["value"])[0]}
     convo = [
         message(row, func) for row in obj
     ]
@@ -38,7 +38,7 @@ if __name__ == "__main__":
         device_map="auto"
     )
     def flow(input):
-        return pipe(f"Act as a translator and transform the following into spanish:")
+        return pipe(f"Act as a translator and transform the following into spanish: {input}")
     transform = map_row(flow)
     def batch_transform(vals):
         try:
