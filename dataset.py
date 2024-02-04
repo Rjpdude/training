@@ -9,12 +9,12 @@ from vllm import LLM
 
 def load_notus(task):
     llm = LLM(model="NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO")
-    return vLLM(model=llm, task=task, max_new_tokens=512, prompt_format="notus", tensor_parallel_size=4)
+    return vLLM(model=llm, task=task, max_new_tokens=512, prompt_format="notus", tensor_parallel_size=4, trust_remote_code=True)
 
 
 def load_zephyr(task):
-    llm = LLM(model="allenai/OLMo-7B")
-    return vLLM(model=llm, task=task, max_new_tokens=512, prompt_format="zephyr", tensor_parallel_size=4)
+    llm = LLM(model="cognitivecomputations/dolphin-2.6-mistral-7b-dpo-laser")
+    return vLLM(model=llm, task=task, max_new_tokens=512, prompt_format="zephyr", tensor_parallel_size=4, trust_remote_code=True)
 
 
 def load_openai(task):
