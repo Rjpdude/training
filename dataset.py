@@ -35,12 +35,7 @@ if __name__ == "__main__":
     )
 
     pipeline = Pipeline(
-        generator=LLMPool(
-            [
-                ProcessLLM(task=TextGenerationTask(), load_llm_fn=load_notus),
-                ProcessLLM(task=TextGenerationTask(), load_llm_fn=load_zephyr),
-            ]
-        ),
+        generator=ProcessLLM(task=TextGenerationTask(), load_llm_fn=load_zephyr),
         labeller=ProcessLLM(
             task=UltraFeedbackTask.for_instruction_following(), load_llm_fn=load_openai
         ),
