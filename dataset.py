@@ -39,7 +39,7 @@ def process(message, model):
         pass
     
 if __name__ == "__main__":
-    model = Source(path="NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO").init()
+    model = Source(path="NousResearch/Nous-Hermes-2-Mixtral-8x7B-SFT").init()
     dataset = load_dataset("teknium/OpenHermes-2.5")
     dataset = dataset["train"]
     dataset = dataset.map(
