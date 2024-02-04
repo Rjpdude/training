@@ -13,7 +13,7 @@ class Source:
     tokenizer: AutoTokenizer = None
     model: AutoModelForCausalLM = None
     
-    def __post_init__(self):
+    def init(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.path, padding_side="left")
         self.tokenizer.pad_token = self.tokenizer.eos_token 
         self.model = AutoModelForCausalLM.from_pretrained(self.model).to("cuda")
@@ -39,7 +39,7 @@ def process(message, model):
         pass
     
 if __name__ == "__main__":
-    model = Source(path="NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO")
+    model = Source(path="NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO").init()
     dataset = load_dataset("teknium/OpenHermes-2.5")
     dataset = dataset["train"]
     dataset = dataset.map(
