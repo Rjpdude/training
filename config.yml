@@ -12,14 +12,11 @@ strict: false
 
 rl: dpo
 datasets:
-  - path: argilla/ultrafeedback-binarized-preferences
+  - path: SiguienteGlobal/dpo-mix
     split: train
-    shards: 100
-    type: chatml.argilla
+    type: chatml.ultra
 chat_template: chatml
 dataset_prepared_path: last_run_prepared
-dataset_shard_num: 100
-dataset_shard_idx: 7
 val_set_size: 0.1
 output_dir: ./qlora-out
 
@@ -81,7 +78,7 @@ save_safetensors: true
 gradient_accumulation_steps: 2
 micro_batch_size: 1
 num_epochs: 4
-optimizer: adamw_torch
+optimizer: adamw_apex_fused
 lr_scheduler: cosine
 learning_rate: 0.0002
 
