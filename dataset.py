@@ -28,6 +28,8 @@ class Source:
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.model = AutoModelForCausalLM.from_pretrained(self.path, device_map="auto", quantization_config=config,
                                                           attn_implementation="flash_attention_2", max_length=4092)
+        self.tokenizer.save_pretrained("./model", push_to_hub="SiguienteGlobal/spanglang-4bit")
+        self.model.save_pretrained("./model", push_to_hub="SiguienteGlobal/spanglang-4bit")
         return self
 
     def generate(self, input):
@@ -57,6 +59,6 @@ if __name__ == "__main__":
     dataset = load_dataset("teknium/OpenHermes-2.5")
     dataset = dataset["train"]
     dataset = dataset.map(
-        lambda col: dict(conversations=process(col["conversations"], model)), batched=True
+        lambda col: dict(conversations=process(col["conversations"], model), batched=True
     )
     dataset.push_to_hub("SiguienteGlobal/spanglang")
