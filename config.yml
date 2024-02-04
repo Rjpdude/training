@@ -13,7 +13,7 @@ strict: false
 datasets:
   - path: argilla/distilabel-capybara-dpo-7k-binarized
     split: train
-    type: chatml.chatml
+    type: chatml.argilla
 chat_template: chatml
 dataset_prepared_path: last_run_prepared
 val_set_size: 0.1
