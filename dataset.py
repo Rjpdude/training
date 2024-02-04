@@ -59,6 +59,6 @@ if __name__ == "__main__":
     dataset = load_dataset("teknium/OpenHermes-2.5")
     dataset = dataset["train"]
     dataset = dataset.map(
-        lambda col: dict(conversations=process(col["conversations"], model), batched=True
+        lambda col: dict(conversations=process(col["conversations"], model)), batched=True
     )
     dataset.push_to_hub("SiguienteGlobal/spanglang")
