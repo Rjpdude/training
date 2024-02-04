@@ -1,16 +1,11 @@
 import torch.distributed as dist
-from transformers import MarianMTModel, pipeline, AutoTokenizer
+from transformers import pipeline
 from datasets import load_dataset
 from sacremoses import MosesTokenizer, MosesPunctNormalizer
 from accelerate import Accelerator
 
-
-def setup_distributed():
-    dist.init_process_group(backend='nccl')
-
-
-def load_dataset_distributed(model):
-    translator = pipeline("translation", model)
+def load_dataset_distributed(model_id):
+    translator = pipeline("translation", model_id)
 
     en = MosesTokenizer(lang='en')
     mpn = MosesPunctNormalizer()
@@ -39,9 +34,15 @@ def process(message, translator, en: MosesTokenizer, mpn: MosesPunctNormalizer):
 
 def main():
     accelerator = Accelerator(split_batches=True)
-    setup_distributed()
 
+    @accelerator.on_main_process
+    def init():
+        dist.init_process_group(backend='nccl')
+
+    init()
+    accelerator.wait_for_everyone()
     dataset = load_dataset_distributed("Helsinki-NLP/opus-mt-en-es")
+    accelerator.wait_for_everyone()
     dataset.push_to_hub("SiguienteGlobal/spanglang")
 
 
