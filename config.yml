@@ -9,7 +9,7 @@ is_mistral_derived_model: true
 load_in_8bit: false
 load_in_4bit: true
 strict: false
-ddp: true
+
 rl: dpo
 datasets:
   - path: SiguienteGlobal/dpo-mix
@@ -17,7 +17,7 @@ datasets:
     type: chatml.ultra
 chat_template: chatml
 dataset_prepared_path: last_run_prepared
-val_set_size: 0.1
+val_set_size: 0.25
 output_dir: ./qlora-out
 
 default_system_message: |-
@@ -47,7 +47,6 @@ train_on_inputs: false
 sequence_len: 512
 sample_packing: false
 pad_to_sequence_len: true
-ddp_find_unused_parameters: false
 
 lora_r: 64
 lora_alpha: 16
@@ -76,7 +75,7 @@ wandb_log_model: checkpoint
 hf_use_auth_token: true
 save_safetensors: true
 
-gradient_accumulation_steps: 1
+gradient_accumulation_steps: 2
 micro_batch_size: 1
 num_epochs: 4
 optimizer: adamw_bnb_8bit
