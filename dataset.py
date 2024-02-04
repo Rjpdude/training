@@ -1,48 +1,23 @@
-import os
-
 from datasets import load_dataset
-from distilabel.llm import LLMPool, ProcessLLM, vLLM
-from distilabel.pipeline import Pipeline
-from distilabel.tasks import TextGenerationTask, UltraFeedbackTask
-from vllm import LLM
+from distilabel.llm import OpenAILLM
+from distilabel.pipeline import pipeline
+from distilabel.tasks import TextGenerationTask
 
+dataset = (
+    load_dataset("argilla/dpo-mix-7k", split="train[:05]").rename_column("prompt", "input")
+)
 
-def load_notus(task):
-    llm = LLM(model="NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO")
-    return vLLM(model=llm, task=task, max_new_tokens=512, prompt_format="notus", tensor_parallel_size=4, trust_remote_code=True)
+# Create a `Task` for generating text given an instruction.
+task = TextGenerationTask()
 
+# Create a `LLM` for generating text using the `Task` created in
+# the first step. As the `LLM` will generate text, it will be a `generator`.
+generator = OpenAILLM(task=task, max_new_tokens=512, api_key="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")
 
-def load_zephyr(task):
-    llm = LLM(model="cognitivecomputations/dolphin-2.6-mistral-7b-dpo-laser")
-    return vLLM(model=llm, max_new_tokens=512, prompt_format="chatlm", tensor_parallel_size=4, dtype="float16", engine_use_ray=True, trust_remote_code=True)
+# Create a pre-defined `Pipeline` using the `pipeline` function and the
+# `generator` created in step 2. The `pipeline` function will create a
+# `labeller` LLM using `OpenAILLM` with the `UltraFeedback` task for
+# instruction following assessment.
+pipeline = pipeline("preference", "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO", generator=generator)
 
-
-def load_openai(task):
-    from distilabel.llm import OpenAILLM
-
-    return OpenAILLM(
-        model="gpt-3.5-turbo",
-        task=task,
-        api_key=os.getenv("OPENAI_API_KEY", "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"),
-        max_new_tokens=512,
-    )
-
-
-if __name__ == "__main__":
-    dataset = (
-        load_dataset("teknium/OpenHermes-2.5", split="train")
-        .rename_column("conversations", "input")
-    )
-
-    pipeline = Pipeline(
-        generator=ProcessLLM(task=TextGenerationTask(), load_llm_fn=load_zephyr),
-        labeller=ProcessLLM(
-            task=UltraFeedbackTask.for_instruction_following(), load_llm_fn=load_openai
-        ),
-    )
-
-    dataset = pipeline.generate(
-        dataset=dataset,  # type: ignore
-        num_generations=3,
-        batch_size=5,
-    )
+dataset = pipeline.generate(dataset)
