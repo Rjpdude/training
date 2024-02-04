@@ -16,7 +16,7 @@ class Source:
     def init(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.path, padding_side="left")
         self.tokenizer.pad_token = self.tokenizer.eos_token 
-        self.model = AutoModelForCausalLM.from_pretrained(self.path, device_map="auto")
+        self.model = AutoModelForCausalLM.from_pretrained(self.path, device_map="auto", load_in_4bit=True, attn_implementation="flash_attention_2")
         return self
 
     def generate(self, input):
