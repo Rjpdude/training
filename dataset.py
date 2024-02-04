@@ -1,31 +1,48 @@
-from transformers import MarianMTModel, pipeline, AutoTokenizer
+from dataclasses import dataclass
+from transformers import AutoModelForCausalLM, MarianMTModel, pipeline, AutoTokenizer
 from transformers.tools.evaluate_agent import translator
 from datasets import load_dataset
 from sacremoses import MosesTokenizer, MosesPunctNormalizer
-import torch
-
-translator_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-en-es", max_length=10200).to("cuda")
-translator_tokenizer = AutoTokenizer.from_pretrained("Helsinki-NLP/opus-mt-en-es", padding='max_length', truncation=True)
-translator = pipeline("translation", model=translator_model, max_length=10200, tokenizer=translator_tokenizer)
 
 en = MosesTokenizer(lang='en')
 mpn = MosesPunctNormalizer()
 
-def process(message):
+@dataclass
+class Source:
+    path: str
+    tokenizer: AutoTokenizer = None
+    model: AutoModelForCausalLM = None
+    
+    def __post_init__(self):
+        self.tokenizer = AutoTokenizer.from_pretrained(self.path, padding_side="left")
+        self.tokenizer.pad_token = self.tokenizer.eos_token 
+        self.model = AutoModelForCausalLM.from_pretrained(self.model).to("cuda")
+        return self
+
+    def generate(self, input):
+        model_inputs = self.tokenizer(input, padding=True, return_tensors="pt").to("cuda")
+        generated_ids = self.model.generate(**model_inputs)
+        output = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        return output
+
+def process(message, model):
     try:
         queue = []
         for chain in message:
             role = "user" if chain["from"] == "human" else "assistant"
-            code = translator(en.tokenize(chain["value"], return_str=True))
-            res = dict(role=role, content=mpn.normalize(code[0]["translation_text"]))
+            pending = en.tokenize(chain["value"], return_str=True)
+            output = model.generate(f"Translate the following into Spanish: {pending}")
+            res = dict(role=role, content=mpn.normalize(output))
             queue.append(res)
         return queue
     except:
         pass
-
-dataset = load_dataset("teknium/OpenHermes-2.5")
-dataset = dataset["train"]
-dataset = dataset.map(
-    lambda col: dict(conversations=[process(chain) for chain in col["conversations"]]), batched=True
-)
-dataset.push_to_hub("SiguienteGlobal/spanglang")
+    
+if __name__ == "__main__":
+    model = Source(path="NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO")
+    dataset = load_dataset("teknium/OpenHermes-2.5")
+    dataset = dataset["train"]
+    dataset = dataset.map(
+        lambda col: dict(conversations=[process(chain, model) for chain in col["conversations"]]), batched=True
+    )
+    dataset.push_to_hub("SiguienteGlobal/spanglang")
