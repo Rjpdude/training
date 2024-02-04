@@ -10,9 +10,8 @@ load_in_8bit: false
 load_in_4bit: true
 strict: false
 
-rl: dpo
 datasets:
-  - path: SiguienteGlobal/dpo-mix
+  - path: argilla/distilabel-capybara-dpo-7k-binarized
     split: train
     type: chatml.ultra
 chat_template: chatml
@@ -84,7 +83,7 @@ learning_rate: 0.0002
 
 group_by_length: false
 bf16: auto
-fp16: true
+fp16:
 tf32: false
 
 gradient_checkpointing: true
@@ -99,7 +98,7 @@ loss_watchdog_threshold: 5.0
 loss_watchdog_patience: 3
 
 warmup_steps: 10
-evals_per_epoch: 4
+evals_per_epoch: 1
 eval_table_size:
 eval_table_max_new_tokens: 128
 saves_per_epoch: 1
