@@ -1,4 +1,4 @@
-base_model: meetkai/functionary-medium-v2.2
+base_model: NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO
 model_type: AutoModelForCausalLM
 tokenizer_type: AutoTokenizer
 tokenizer_config: meetkai/functionary-medium-v2.2
@@ -7,7 +7,7 @@ tokenizer_use_fast: true
 is_mistral_derived_model: true
 
 load_in_8bit: false
-load_in_4bit: true
+load_in_4bit: false
 strict: false
 
 rl: dpo
@@ -29,8 +29,8 @@ default_system_message: |-
 
 ## You can optionally freeze the entire model and unfreeze a subset of parameters
 unfrozen_parameters:
-  - lm_head.*
-  - model.embed_tokens.*
+  # - lm_head.*
+  # - model.embed_tokens.*
 #  - model.layers.2[0-9]+.block_sparse_moe.gate.*
 #  - model.layers.2[0-9]+.block_sparse_moe.experts.*
 #  - model.layers.3[0-9]+.block_sparse_moe.gate.*
@@ -39,32 +39,32 @@ unfrozen_parameters:
 model_config:
   output_router_logits: true
 
-adapter: qlora
-lora_model_dir: NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO-adapter
+adapter:
+lora_model_dir:
 hub_model_id: SiguienteGlobal/Linguistica2.1
-train_on_inputs: true
+train_on_inputs: false
 
-sequence_len: 1024
+sequence_len: 2048
 sample_packing: false
 pad_to_sequence_len: true
 
-lora_r: 64
-lora_alpha: 16
-lora_dropout: 0.05
-lora_target_linear: true
-lora_fan_in_fan_out: false
-lora_modules_to_save:
-  - lm_head
-  - embed_tokens
-lora_target_modules:
-  - gate
-  - q_proj
-  - k_proj
-  - v_proj
-  - o_proj
-  - w1
-  - w2
-  - w3
+# lora_r: 64
+# lora_alpha: 16
+# lora_dropout: 0.05
+# lora_target_linear: true
+# lora_fan_in_fan_out: false
+# lora_modules_to_save:
+#   - lm_head
+#   - embed_tokens
+# lora_target_modules:
+#   - gate
+#   - q_proj
+#   - k_proj
+#   - v_proj
+#   - o_proj
+#   - w1
+#   - w2
+#   - w3
 
 wandb_project: Linguistica
 wandb_entity:
