@@ -9,6 +9,7 @@ is_mistral_derived_model: true
 load_in_8bit: false
 load_in_4bit: true
 strict: false
+ddp: true
 rl: dpo
 datasets:
   - path: argilla/dpo-mix-7k
