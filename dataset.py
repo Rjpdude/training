@@ -16,11 +16,11 @@ class Source:
     def init(self):
         self.tokenizer = AutoTokenizer.from_pretrained(self.path, padding_side="left")
         self.tokenizer.pad_token = self.tokenizer.eos_token 
-        self.model = AutoModelForCausalLM.from_pretrained(self.path, device_map="auto").to("cuda")
+        self.model = AutoModelForCausalLM.from_pretrained(self.path, device_map="auto")
         return self
 
     def generate(self, input):
-        model_inputs = self.tokenizer(input, padding=True, return_tensors="pt").to("cuda")
+        model_inputs = self.tokenizer(input, padding=True, return_tensors="pt")
         generated_ids = self.model.generate(**model_inputs)
         output = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
         return output
