@@ -22,7 +22,7 @@ from distilabel.tasks import TextGenerationTask
 
 if __name__ == "__main__":
     dataset = (
-        load_dataset("teknium/OpenHermes-2.5", split="test[:100]")
+        load_dataset("teknium/OpenHermes-2.5", split="train[:100]")
         .prepare_for_task("text-generation")
         .rename_column("conversations", "input")
     )
