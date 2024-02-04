@@ -39,6 +39,7 @@ train_on_inputs: false
 sequence_len: 512
 sample_packing: false
 pad_to_sequence_len: true
+ddp_find_unused_parameters: false
 
 lora_r: 64
 lora_alpha: 16
