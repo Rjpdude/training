@@ -78,7 +78,7 @@ save_safetensors: true
 gradient_accumulation_steps: 2
 micro_batch_size: 1
 num_epochs: 4
-optimizer: adamw_apex_fused
+optimizer: adamw_bnb_8bit
 lr_scheduler: cosine
 learning_rate: 0.0002
 
@@ -104,7 +104,7 @@ eval_table_size:
 eval_table_max_new_tokens: 128
 saves_per_epoch: 1
 debug:
-deepspeed: ./deepspeed_configs/zero2.json
+deepspeed: ./deepspeed_configs/zero1.json
 weight_decay: 0.0
 fsdp:
 fsdp_config:
