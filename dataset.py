@@ -37,10 +37,10 @@ def process(message, model):
         return queue
     except:
         pass
-    
+
 if __name__ == "__main__":
-    model = Source(path="NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO")
-    dataset = load_dataset("teknium/OpenHermes-2.5")
+    model = Source(path="NousResearch/Nous-Hermes-2-Mixtral-8x7B-SFT")
+    dataset = load_dataset("teknium/OpenHermes-2.5", split=[])
     dataset = dataset["train"]
     dataset = dataset.map(
         lambda col: dict(conversations=process(col["conversations"], model)), batched=True
