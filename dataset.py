@@ -4,7 +4,7 @@ from datasets import load_dataset
 from sacremoses import MosesTokenizer, MosesPunctNormalizer
 from accelerate import Accelerator
 
-def load_dataset_distributed(model_id):
+def load_dataset_distributed(model_id = "Helsinki-NLP/opus-mt-en-es"):
     translator = pipeline("translation", model_id)
 
     en = MosesTokenizer(lang='en')
@@ -33,15 +33,15 @@ def process(message, translator, en: MosesTokenizer, mpn: MosesPunctNormalizer):
 
 
 def main():
-    accelerator = Accelerator(split_batches=True)
-    accelerator.prepare_data_loader()
+    accelerator = Accelerator(split_batches=True
     @accelerator.on_main_process
     def init():
         dist.init_process_group(backend='nccl')
 
     init()
+    accelerator.prepare_data_loader(load_dataset_distributed)
     accelerator.wait_for_everyone()
-    dataset = load_dataset_distributed("Helsinki-NLP/opus-mt-en-es")
+    dataset = load_dataset_distributed()
     accelerator.wait_for_everyone()
     dataset.push_to_hub("SiguienteGlobal/spanglang")
 
