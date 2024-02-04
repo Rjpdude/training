@@ -36,7 +36,6 @@ if __name__ == "__main__":
         "text-generation",
         model=AutoModelForCausalLM.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO", device_map="auto"),
         tokenizer=AutoTokenizer.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO"),
-        device=accelerator.device,
         model_kwargs={"prompt":"Translate to spanish"}
     )
     transform = map_row(
