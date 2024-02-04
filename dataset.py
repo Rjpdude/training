@@ -12,7 +12,7 @@ task = TextGenerationTask()
 
 # Create a `LLM` for generating text using the `Task` created in
 # the first step. As the `LLM` will generate text, it will be a `generator`.
-generator = OpenAILLM(task=task, max_new_tokens=512, api_key="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")
+generator = OpenAILLM(task=task, max_new_tokens=512, api_key="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")
 
 # Create a pre-defined `Pipeline` using the `pipeline` function and the
 # `generator` created in step 2. The `pipeline` function will create a
