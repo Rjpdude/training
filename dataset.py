@@ -31,7 +31,7 @@ class Source:
         return self
 
     def generate(self, input):
-        model_inputs = self.tokenizer(input, padding=True, return_tensors="pt")
+        model_inputs = self.tokenizer(input, padding=True, return_tensors="pt").input_ids.cuda()
         generated_ids = self.model.generate(**model_inputs)
         output = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
         return output
