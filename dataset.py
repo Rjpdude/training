@@ -8,15 +8,13 @@ from vllm import LLM
 
 
 def load_notus(task):
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     llm = LLM(model="NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO")
-    return vLLM(model=llm, task=task, max_new_tokens=512, prompt_format="notus")
+    return vLLM(model=llm, task=task, max_new_tokens=512, prompt_format="notus", tensor_parallel_size=4)
 
 
 def load_zephyr(task):
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     llm = LLM(model="allenai/OLMo-7B")
-    return vLLM(model=llm, task=task, max_new_tokens=512, prompt_format="zephyr")
+    return vLLM(model=llm, task=task, max_new_tokens=512, prompt_format="zephyr", tensor_parallel_size=4)
 
 
 def load_openai(task):
