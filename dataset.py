@@ -9,8 +9,8 @@ def setup_distributed():
     dist.init_process_group(backend='nccl')
 
 
-def load_dataset_distributed(model, tokenizer):
-    translator = pipeline("translation", "Helsinki-NLP/opus-mt-en-es")
+def load_dataset_distributed(model):
+    translator = pipeline("translation", model)
 
     en = MosesTokenizer(lang='en')
     mpn = MosesPunctNormalizer()
@@ -41,11 +41,7 @@ def main():
     accelerator = Accelerator(split_batches=True)
     setup_distributed()
 
-    translator_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-en-es", max_length=10200).to(
-        accelerator.device)
-    translator_tokenizer = AutoTokenizer.from_pretrained("Helsinki-NLP/opus-mt-en-es", max_length=10200)
-
-    dataset = load_dataset_distributed(translator_model, translator_tokenizer)
+    dataset = load_dataset_distributed("Helsinki-NLP/opus-mt-en-es")
     dataset.push_to_hub("SiguienteGlobal/spanglang")
 
 
