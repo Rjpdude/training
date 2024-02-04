@@ -32,14 +32,8 @@ def process(message, translator, en: MosesTokenizer, mpn: MosesPunctNormalizer):
         pass
 
 
-def main():
-    accelerator = Accelerator(split_batches=True)
-
-    @accelerator.on_main_process
-    def init():
-        dist.init_process_group(backend='nccl')
-
-    init()
+def main(accelerator):
+    dist.init_process_group(backend='nccl')
     accelerator.prepare_data_loader(load_dataset_distributed)
     accelerator.wait_for_everyone()
     dataset = load_dataset_distributed()
@@ -48,4 +42,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    accelerator = Accelerator()
+    main(accelerator)
