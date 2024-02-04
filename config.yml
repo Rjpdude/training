@@ -12,9 +12,9 @@ strict: false
 
 rl: dpo
 datasets:
-  - path: argilla/distilabel-sample-evol-instruct
+  - path: argilla/distilabel-intel-orca-dpo-pairs
     split: train
-    type: chatml.argilla
+    type: chatml.intel
 chat_template: chatml
 dataset_prepared_path: last_run_prepared
 val_set_size: 0.1
