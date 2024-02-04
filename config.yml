@@ -12,12 +12,13 @@ strict: false
 
 rl: dpo
 datasets:
-  - path: SiguienteGlobal/dpo-mix
+  - path: argilla/ultrafeedback-binarized-preferences
     split: train
-    type: chatml.ultra
+    shards: 100
+    type: chatml.argilla
 chat_template: chatml
 dataset_prepared_path: last_run_prepared
-val_set_size: 0.25
+val_set_size: 0.1
 output_dir: ./qlora-out
 
 default_system_message: |-
@@ -29,10 +30,10 @@ default_system_message: |-
 
 ## You can optionally freeze the entire model and unfreeze a subset of parameters
 unfrozen_parameters:
- - lm_head.*
- - model.embed_tokens.*
+  - lm_head.*
+  - model.embed_tokens.*
 #  - model.layers.2[0-9]+.block_sparse_moe.gate.*
-#  - model.layers.2[0-9]+.block_sparse_moe.experts.*
+#- model.layers.2[0-9]+.block_sparse_moe.experts.*
 #  - model.layers.3[0-9]+.block_sparse_moe.gate.*
 #  - model.layers.3[0-9]+.block_sparse_moe.experts.*
 
@@ -41,10 +42,10 @@ model_config:
 
 adapter: qlora
 lora_model_dir: NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO-adapter
-hub_model_id: SiguienteGlobal/Linguistica2.0
-train_on_inputs: false
+hub_model_id: SiguienteGlobal/Linguistica2.1
+train_on_inputs: true
 
-sequence_len: 512
+sequence_len: 1024
 sample_packing: false
 pad_to_sequence_len: true
 
@@ -84,7 +85,7 @@ learning_rate: 0.0002
 
 group_by_length: false
 bf16: auto
-fp16:
+fp16: true
 tf32: false
 
 gradient_checkpointing: true
@@ -104,7 +105,7 @@ eval_table_size:
 eval_table_max_new_tokens: 128
 saves_per_epoch: 1
 debug:
-deepspeed:
+deepspeed: ./deepspeed_config/zero2.yml
 weight_decay: 0.0
 fsdp:
 fsdp_config:
