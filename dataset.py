@@ -15,6 +15,10 @@ class Source:
     model: AutoModelForCausalLM = None
 
     def init(self):
+        from transformers import set_seed
+
+        set_seed(91)
+
         config = BitsAndBytesConfig(
             load_in_8bit=False,
             load_in_4bit=True,
@@ -23,7 +27,7 @@ class Source:
         self.tokenizer = AutoTokenizer.from_pretrained(self.path, padding_side="left")
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.model = AutoModelForCausalLM.from_pretrained(self.path, device_map="auto", quantization_config=config,
-                                                          attn_implementation="flash_attention_2")
+                                                          attn_implementation="flash_attention_2", max_length=4092)
         return self
 
     def generate(self, input):
@@ -41,6 +45,7 @@ def process(message, model):
             pending = en.tokenize(chain["value"], return_str=True)
             output = model.generate(f"Translate the following into Spanish: {pending}")
             res = dict(role=role, content=mpn.normalize(output))
+            print(res)
             queue.append(res)
         return queue
     except:
