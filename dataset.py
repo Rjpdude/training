@@ -34,9 +34,9 @@ if __name__ == "__main__":
     accelerator = Accelerator()
     pipe = pipeline(
         "text-generation",
-        model=AutoModelForCausalLM.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO", device_map="auto"),
-        tokenizer=AutoTokenizer.from_pretrained("NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO"),
-        model_kwargs={"prompt":"Translate to spanish"}
+        model="NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO",
+        device_map="auto",
+        model_kwargs={"prompt": "Translate to spanish"}
     )
     transform = map_row(
         pipe("translation", model="Helsinki-NLP/opus-mt-en-es", max_length=32000)
