@@ -113,7 +113,7 @@ def load_openai(task):
 if __name__ == "__main__":
     dataset = (
         load_dataset("teknium/OpenHermes-2.5", split="train")
-        .rename_column("conversation", "input")
+        .rename_column("conversations", "input")
     )
 
     pipeline = Pipeline(
