@@ -5,7 +5,7 @@ from sacremoses import MosesTokenizer, MosesPunctNormalizer
 import torch
 
 translator_model = MarianMTModel.from_pretrained("Helsinki-NLP/opus-mt-en-es", max_length=10200).to("cuda")
-translator_tokenizer = AutoTokenizer.from_pretrained("Helsinki-NLP/opus-mt-en-es", max_length=10200)
+translator_tokenizer = AutoTokenizer.from_pretrained("Helsinki-NLP/opus-mt-en-es", padding='max_length', truncation=True)
 translator = pipeline("translation", model=translator_model, max_length=10200, tokenizer=translator_tokenizer)
 
 en = MosesTokenizer(lang='en')
