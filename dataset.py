@@ -35,12 +35,11 @@ if __name__ == "__main__":
     pipe = pipeline(
         "text-generation",
         model="NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO",
-        device_map="auto",
-        model_kwargs={"prompt": "Translate to spanish"}
+        device_map="auto"
     )
-    transform = map_row(
-        pipe("translation", model="Helsinki-NLP/opus-mt-en-es", max_length=32000)
-    )
+    def flow(input):
+        return pipe(f"Act as a translator and transform the following into spanish:")
+    transform = map_row(flow)
     def batch_transform(vals):
         try:
             return transform(vals)
