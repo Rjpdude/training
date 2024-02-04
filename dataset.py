@@ -33,7 +33,8 @@ def process(message, translator, en: MosesTokenizer, mpn: MosesPunctNormalizer):
 
 
 def main():
-    accelerator = Accelerator(split_batches=True
+    accelerator = Accelerator(split_batches=True)
+
     @accelerator.on_main_process
     def init():
         dist.init_process_group(backend='nccl')
