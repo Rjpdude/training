@@ -23,6 +23,7 @@ class Source:
         model_inputs = self.tokenizer(input, padding=True, return_tensors="pt").to("cuda")
         generated_ids = self.model.generate(**model_inputs)
         output = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        print(output)
         return output
 
 def process(message, model):
@@ -40,7 +41,7 @@ def process(message, model):
 
 if __name__ == "__main__":
     model = Source(path="NousResearch/Nous-Hermes-2-Mixtral-8x7B-SFT")
-    dataset = load_dataset("teknium/OpenHermes-2.5", split=[])
+    dataset = load_dataset("teknium/OpenHermes-2.5")
     dataset = dataset["train"]
     dataset = dataset.map(
         lambda col: dict(conversations=process(col["conversations"], model)), batched=True
