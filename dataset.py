@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from transformers import AutoModelForCausalLM, MarianMTModel, pipeline, AutoTokenizer
+from transformers import AutoModelForCausalLM, MarianMTModel, pipeline, AutoTokenizer, BitsAndBytesConfig
 from transformers.tools.evaluate_agent import translator
 from datasets import load_dataset
 from sacremoses import MosesTokenizer, MosesPunctNormalizer
@@ -7,16 +7,23 @@ from sacremoses import MosesTokenizer, MosesPunctNormalizer
 en = MosesTokenizer(lang='en')
 mpn = MosesPunctNormalizer()
 
+
 @dataclass
 class Source:
     path: str
     tokenizer: AutoTokenizer = None
     model: AutoModelForCausalLM = None
-    
+
     def init(self):
+        config = BitsAndBytesConfig(
+            load_in_8bit=False,
+            load_in_4bit=True,
+            bnb_4bit_use_double_quant=True,
+        )
         self.tokenizer = AutoTokenizer.from_pretrained(self.path, padding_side="left")
-        self.tokenizer.pad_token = self.tokenizer.eos_token 
-        self.model = AutoModelForCausalLM.from_pretrained(self.path, device_map="auto", load_in_4bit=True, attn_implementation="flash_attention_2")
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.model = AutoModelForCausalLM.from_pretrained(self.path, device_map="auto", quantization_config=config,
+                                                          attn_implementation="flash_attention_2")
         return self
 
     def generate(self, input):
@@ -24,6 +31,7 @@ class Source:
         generated_ids = self.model.generate(**model_inputs)
         output = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
         return output
+
 
 def process(message, model):
     try:
@@ -37,7 +45,8 @@ def process(message, model):
         return queue
     except:
         pass
-    
+
+
 if __name__ == "__main__":
     model = Source(path="NousResearch/Nous-Hermes-2-Mixtral-8x7B-SFT").init()
     dataset = load_dataset("teknium/OpenHermes-2.5")
