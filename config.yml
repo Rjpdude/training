@@ -15,7 +15,7 @@ dataset_prepared_path: last_run_prepared
 val_set_size: 0.0
 output_dir: ./qlora-out
 
-
+chat_template: chatlm
 hub_model_id: SiguienteGlobal/linguistica
 hf_use_auth_token: true
 
