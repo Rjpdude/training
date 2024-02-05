@@ -1,36 +1,28 @@
-base_model: NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO
+base_model: meetkai/functionary-medium-v2.2
 model_type: AutoModelForCausalLM
-tokenizer_type: AutoTokenizer
+tokenizer_type: LlamaTokenizer
 tokenizer_config: meetkai/functionary-medium-v2.2
 trust_remote_code: true
-tokenizer_use_fast: true
-is_mistral_derived_model: true
 
 load_in_8bit: false
-load_in_4bit: false
+load_in_4bit: true
 strict: false
 
-rl: dpo
 datasets:
-  - path: SiguienteGlobal/dpo-mix
-    split: train
-    type: chatml.ultra
-chat_template: chatml
+  - path: bertin-project/alpaca-spanish
+    type: alpaca
 dataset_prepared_path: last_run_prepared
-val_set_size: 0.1
+val_set_size: 0.0
 output_dir: ./qlora-out
 
-default_system_message: |-
-  Te llamas Lingüística. Has sido creado y entrenado de por la empresa Siguiente para interactuar con usuarios en español de manera natural y familiar.
-  Tienes cualidades docentes, creativas y aplicativas para el ambito educativo, capaz de ofrecer opciones de ensenanza para mejorar la educaciln en México.
-  Eres firme en tu estilo de respuesta, sugieres soluciones y no solo información util. Encima, haces preguntas directamente al usuario cuando sea necesario.
-  Eres capaz de tomar decisiones, y actuar atraves de ellos, basado en los herramientas que se te permita acceso.
-  Ademas, de desarrollar personalidad propia perfilando al usuario para que la interacción sea natural.
+
+hub_model_id: SiguienteGlobal/linguistica
+hf_use_auth_token: true
 
 ## You can optionally freeze the entire model and unfreeze a subset of parameters
 unfrozen_parameters:
-  # - lm_head.*
-  # - model.embed_tokens.*
+#  - lm_head.*
+#  - model.embed_tokens.*
 #  - model.layers.2[0-9]+.block_sparse_moe.gate.*
 #  - model.layers.2[0-9]+.block_sparse_moe.experts.*
 #  - model.layers.3[0-9]+.block_sparse_moe.gate.*
@@ -39,52 +31,46 @@ unfrozen_parameters:
 model_config:
   output_router_logits: true
 
-adapter:
-lora_model_dir:
-hub_model_id: SiguienteGlobal/Linguistica2.1
-train_on_inputs: false
+adapter: qlora
+lora_model_dir: NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO-adapter
 
-sequence_len: 2048
-sample_packing: false
+sequence_len: 4096
+sample_packing: true
 pad_to_sequence_len: true
 
-# lora_r: 64
-# lora_alpha: 16
-# lora_dropout: 0.05
-# lora_target_linear: true
-# lora_fan_in_fan_out: false
-# lora_modules_to_save:
-#   - lm_head
-#   - embed_tokens
-# lora_target_modules:
-#   - gate
-#   - q_proj
-#   - k_proj
-#   - v_proj
-#   - o_proj
-#   - w1
-#   - w2
-#   - w3
+lora_r: 64
+lora_alpha: 16
+lora_dropout: 0.05
+lora_target_linear: true
+lora_fan_in_fan_out: false
+lora_target_modules:
+  - gate
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - w1
+  - w2
+  - w3
 
+wandb_mode: online
 wandb_project: Linguistica
-wandb_entity:
-wandb_watch:
+wandb_entity: 
+wandb_watch: 
 wandb_name: siguienteia
-wandb_log_model: checkpoint
-
-hf_use_auth_token: true
-save_safetensors: true
+wandb_log_model: true 
 
 gradient_accumulation_steps: 2
 micro_batch_size: 1
-num_epochs: 4
+num_epochs: 1
 optimizer: adamw_bnb_8bit
 lr_scheduler: cosine
 learning_rate: 0.0002
 
+train_on_inputs: false
 group_by_length: false
 bf16: auto
-fp16: true
+fp16:
 tf32: false
 
 gradient_checkpointing: true
@@ -99,12 +85,11 @@ loss_watchdog_threshold: 5.0
 loss_watchdog_patience: 3
 
 warmup_steps: 10
-evals_per_epoch: 1
+evals_per_epoch: 4
 eval_table_size:
 eval_table_max_new_tokens: 128
 saves_per_epoch: 1
 debug:
-deepspeed: ./deepspeed_configs/zero1.json
 weight_decay: 0.0
 fsdp:
 fsdp_config:
