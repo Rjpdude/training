@@ -562,40 +562,39 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host=args.host,
-        # port=args.port,
-        port=8000,
+        port=args.port,
         log_level="info",
         timeout_keep_alive=TIMEOUT_KEEP_ALIVE,
     )
 
-    os.environ["OPENAI_API_URL"] = "[::]:8000/v1/"
-    os.environ["OPENAI_API_KEY"] = "sk-"
-    os.environ["AZURE_COGS_KEY"] = "84dc27487e56469fa2418163c4e062ad"
-    os.environ["AZURE_COGS_ENDPOINT"] = (
-        "https://siguiente-multi-modal.cognitiveservices.azure.com/"
-    )
-    os.environ["AZURE_COGS_REGION"] = "southcentralus"
-    os.environ["TAVILY_API_KEY"] = "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"
+    # os.environ["OPENAI_API_URL"] = "[::]:8000/v1/"
+    # os.environ["OPENAI_API_KEY"] = "sk-"
+    # os.environ["AZURE_COGS_KEY"] = "84dc27487e56469fa2418163c4e062ad"
+    # os.environ["AZURE_COGS_ENDPOINT"] = (
+    #     "https://siguiente-multi-modal.cognitiveservices.azure.com/"
+    # )
+    # os.environ["AZURE_COGS_REGION"] = "southcentralus"
+    # os.environ["TAVILY_API_KEY"] = "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"
 
-    from langchain.agents import AgentType, initialize_agent
-    from langchain.tools.render import format_tool_to_openai_function
-    from langchain_community.agent_toolkits import AzureCognitiveServicesToolkit
-    from langchain_community.tools.tavily_search import TavilySearchResults
-    from langchain_openai import OpenAI
-    from langgraph.prebuilt import ToolExecutor
+    # from langchain.agents import AgentType, initialize_agent
+    # from langchain.tools.render import format_tool_to_openai_function
+    # from langchain_community.agent_toolkits import AzureCognitiveServicesToolkit
+    # from langchain_community.tools.tavily_search import TavilySearchResults
+    # from langchain_openai import OpenAI
+    # from langgraph.prebuilt import ToolExecutor
 
-    openai = OpenAI(base_url="[::]:8000", model=args.served_model_name, streaming=True)
-    toolkit = AzureCognitiveServicesToolkit()
-    tools = toolkit.get_tools().append(TavilySearchResults(max_results=10))
-    agent = initialize_agent(
-        tools,
-        llm=openai,
-        agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
-        agent_type=AgentType.OPENAI_FUNCTIONS,
-        verbose=True,
-    )
+    # openai = OpenAI(base_url="[::]:8000", model=args.served_model_name, streaming=True)
+    # toolkit = AzureCognitiveServicesToolkit()
+    # tools = toolkit.get_tools().append(TavilySearchResults(max_results=10))
+    # agent = initialize_agent(
+    #     tools,
+    #     llm=openai,
+    #     agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
+    #     agent_type=AgentType.OPENAI_FUNCTIONS,
+    #     verbose=True,
+    # )
 
-    functions = [format_tool_to_openai_function(t) for t in tools]
-    model = openai.bind(functions)
-    tool_executor = ToolExecutor(tools)
+    # functions = [format_tool_to_openai_function(t) for t in tools]
+    # model = openai.bind(functions)
+    # tool_executor = ToolExecutor(tools)
 
