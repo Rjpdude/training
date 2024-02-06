@@ -1,382 +1,601 @@
+# Adapted from
+# https://github.com/vllm-project/vllm/blob/2bdea7ac110d3090d6a3c582aed36577ca480473/vllm/entrypoints/openai/api_server.py
+
+# Copyright 2023 vLLM contributors
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import argparse
+import asyncio
 import json
 import os
-import shutil
-from collections import defaultdict
-from tempfile import TemporaryDirectory
-from typing import Dict, List, Optional, Set, Tuple
+import re
+import time
+from http import HTTPStatus
+from typing import Any, AsyncGenerator, Dict, List, Literal, Optional, Tuple, Union
 
-import torch
+import fastapi
+import uvicorn
+from fastapi import BackgroundTasks, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
+from langchain_community.chat_message_histories.upstash_redis import (
+    UpstashRedisChatMessageHistory,
+)
+from pydantic import BaseModel, Field, validator
+from vllm.engine.arg_utils import AsyncEngineArgs
+from vllm.entrypoints.openai.protocol import (
+    ErrorResponse,
+    LogProbs,
+    ModelCard,
+    ModelList,
+    ModelPermission,
+    UsageInfo,
+)
+from vllm.logger import init_logger
+from vllm.outputs import RequestOutput
+from vllm.sampling_params import SamplingParams
+from vllm.transformers_utils.tokenizer import get_tokenizer
+from vllm.utils import random_uuid
 
-from huggingface_hub import CommitInfo, CommitOperationAdd, Discussion, HfApi, hf_hub_download
-from huggingface_hub.file_download import repo_folder_name
-from safetensors.torch import _find_shared_tensors, _is_complete, load_file, save_file
+from functionary.inference import enforce_tool_choice, prepare_messages_for_inference
+from functionary.inference_stream import generate_openai_format_from_stream_async
+from functionary.openai_types import (
+    ChatCompletionChunk,
+    ChatMessage,
+    Function,
+    FunctionCall,
+    StreamChoice,
+    Tool,
+)
+from functionary.prompt_template import (
+    PredefinedFuncTypes,
+    PromptTemplate,
+    get_prompt_template_from_tokenizer,
+)
+from functionary.prompt_template.prompt_template_v2 import get_random_tool_call_id
+
+TIMEOUT_KEEP_ALIVE = 5  # seconds
+
+logger = init_logger(__name__)
+served_model = None
+app = fastapi.FastAPI()
 
 
-COMMIT_DESCRIPTION = """
-This is an automated PR created with https://huggingface.co/spaces/safetensors/convert
+class ChatCompletionRequest(BaseModel):
+    model: str
+    messages: List[ChatMessage]
+    functions: Optional[List[Function]] = None
+    tools: Optional[List[Tool]] = None
+    tool_choice: Optional[Union[str, Tool]] = None
+    temperature: Optional[float] = 0.7
+    top_p: Optional[float] = 1.0
+    n: Optional[int] = 1
+    max_tokens: Optional[int] = 256
+    stop: Optional[Union[str, List[str]]] = Field(default_factory=list)
+    stream: Optional[bool] = False
+    presence_penalty: Optional[float] = 0.0
+    frequency_penalty: Optional[float] = 0.0
+    logit_bias: Optional[Dict[str, float]] = None
+    user: Optional[str] = None
+    # Additional parameters supported by vLLM
+    best_of: Optional[int] = None
+    top_k: Optional[int] = -1
+    ignore_eos: Optional[bool] = False
+    use_beam_search: Optional[bool] = False
 
-This new file is equivalent to `pytorch_model.bin` but safe in the sense that
-no arbitrary code can be put into it.
-
-These files also happen to load much faster than their pytorch counterpart:
-https://colab.research.google.com/github/huggingface/notebooks/blob/main/safetensors_doc/en/speed.ipynb
-
-The widgets on your model page will run using this model even if this is not merged
-making sure the file actually works.
-
-If you find any issues: please report here: https://huggingface.co/spaces/safetensors/convert/discussions
-
-Feel free to ignore this PR.
-"""
-
-ConversionResult = Tuple[List["CommitOperationAdd"], List[Tuple[str, "Exception"]]]
-
-
-def _remove_duplicate_names(
-    state_dict: Dict[str, torch.Tensor],
-    *,
-    preferred_names: List[str] = None,
-    discard_names: List[str] = None,
-) -> Dict[str, List[str]]:
-    if preferred_names is None:
-        preferred_names = []
-    preferred_names = set(preferred_names)
-    if discard_names is None:
-        discard_names = []
-    discard_names = set(discard_names)
-
-    shareds = _find_shared_tensors(state_dict)
-    to_remove = defaultdict(list)
-    for shared in shareds:
-        complete_names = set([name for name in shared if _is_complete(state_dict[name])])
-        if not complete_names:
-            if len(shared) == 1:
-                # Force contiguous
-                name = list(shared)[0]
-                state_dict[name] = state_dict[name].clone()
-                complete_names = {name}
+    @validator("tool_choice", always=True)
+    def validate_tool_choice(cls, value, values):
+        if value is None:
+            if values["tools"] is None and values["functions"] is None:
+                return "none"
             else:
-                raise RuntimeError(
-                    f"Error while trying to find names to remove to save state dict, but found no suitable name to keep for saving amongst: {shared}. None is covering the entire storage.Refusing to save/load the model since you could be storing much more memory than needed. Please refer to https://huggingface.co/docs/safetensors/torch_shared_tensors for more information. Or open an issue."
-                )
-
-        keep_name = sorted(list(complete_names))[0]
-
-        # Mecanism to preferentially select keys to keep
-        # coming from the on-disk file to allow
-        # loading models saved with a different choice
-        # of keep_name
-        preferred = complete_names.difference(discard_names)
-        if preferred:
-            keep_name = sorted(list(preferred))[0]
-
-        if preferred_names:
-            preferred = preferred_names.intersection(complete_names)
-            if preferred:
-                keep_name = sorted(list(preferred))[0]
-        for name in sorted(shared):
-            if name != keep_name:
-                to_remove[keep_name].append(name)
-    return to_remove
+                return "auto"
+        return value
 
 
-def get_discard_names(model_id: str, revision: Optional[str], folder: str, token: Optional[str]) -> List[str]:
-    try:
-        import json
-
-        import transformers
-
-        config_filename = hf_hub_download(
-            model_id, revision=revision, filename="config.json", token=token, cache_dir=folder
-        )
-        with open(config_filename, "r") as f:
-            config = json.load(f)
-        architecture = config["architectures"][0]
-
-        class_ = getattr(transformers, architecture)
-
-        # Name for this varible depends on transformers version.
-        discard_names = getattr(class_, "_tied_weights_keys", [])
-
-    except Exception:
-        discard_names = []
-    return discard_names
+class ChatCompletionResponseChoice(BaseModel):
+    index: int
+    message: ChatMessage
+    finish_reason: Optional[
+        Literal["stop", "length", "function_call", "tool_calls"]
+    ] = None
 
 
-class AlreadyExists(Exception):
-    pass
+class ChatCompletionResponse(BaseModel):
+    id: str = Field(default_factory=lambda: f"chatcmpl-{random_uuid()}")
+    object: str = "chat.completion"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    model: str
+    choices: List[ChatCompletionResponseChoice]
+    usage: UsageInfo
 
 
-def check_file_size(sf_filename: str, pt_filename: str):
-    sf_size = os.stat(sf_filename).st_size
-    pt_size = os.stat(pt_filename).st_size
-
-    if (sf_size - pt_size) / pt_size > 0.01:
-        raise RuntimeError(
-            f"""The file size different is more than 1%:
-         - {sf_filename}: {sf_size}
-         - {pt_filename}: {pt_size}
-         """
-        )
+class DeltaMessage(BaseModel):
+    role: Optional[str] = None
+    content: Optional[str] = None
 
 
-def rename(pt_filename: str) -> str:
-    filename, ext = os.path.splitext(pt_filename)
-    local = f"{filename}.safetensors"
-    local = local.replace("pytorch_model", "model")
-    return local
+class ChatCompletionResponseStreamChoice(BaseModel):
+    index: int
+    delta: DeltaMessage
+    finish_reason: Optional[Literal["stop", "length", "function_call"]] = None
 
 
-def convert_multi(
-    model_id: str, *, revision=Optional[str], folder: str, token: Optional[str], discard_names: List[str]
-) -> ConversionResult:
-    filename = hf_hub_download(
-        repo_id=model_id, revision=revision, filename="pytorch_model.bin.index.json", token=token, cache_dir=folder
-    )
-    with open(filename, "r") as f:
-        data = json.load(f)
-
-    filenames = set(data["weight_map"].values())
-    local_filenames = []
-    for filename in filenames:
-        pt_filename = hf_hub_download(repo_id=model_id, filename=filename, token=token, cache_dir=folder)
-
-        sf_filename = rename(pt_filename)
-        sf_filename = os.path.join(folder, sf_filename)
-        convert_file(pt_filename, sf_filename, discard_names=discard_names)
-        local_filenames.append(sf_filename)
-
-    index = os.path.join(folder, "model.safetensors.index.json")
-    with open(index, "w") as f:
-        newdata = {k: v for k, v in data.items()}
-        newmap = {k: rename(v) for k, v in data["weight_map"].items()}
-        newdata["weight_map"] = newmap
-        json.dump(newdata, f, indent=4)
-    local_filenames.append(index)
-
-    operations = [
-        CommitOperationAdd(path_in_repo=os.path.basename(local), path_or_fileobj=local) for local in local_filenames
-    ]
-    errors: List[Tuple[str, "Exception"]] = []
-
-    return operations, errors
+class ChatCompletionStreamResponse(BaseModel):
+    id: str = Field(default_factory=lambda: f"chatcmpl-{random_uuid()}")
+    object: str = "chat.completion.chunk"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    model: str
+    choices: List[ChatCompletionResponseStreamChoice]
 
 
-def convert_single(
-    model_id: str, *, revision: Optional[str], folder: str, token: Optional[str], discard_names: List[str]
-) -> ConversionResult:
-    pt_filename = hf_hub_download(
-        repo_id=model_id, revision=revision, filename="pytorch_model.bin", token=token, cache_dir=folder
+def create_error_response(status_code: HTTPStatus, message: str) -> JSONResponse:
+    return JSONResponse(
+        ErrorResponse(message=message, type="invalid_request_error").dict(),
+        status_code=status_code.value,
     )
 
-    sf_name = "model.safetensors"
-    sf_filename = os.path.join(folder, sf_name)
-    convert_file(pt_filename, sf_filename, discard_names)
-    operations = [CommitOperationAdd(path_in_repo=sf_name, path_or_fileobj=sf_filename)]
-    errors: List[Tuple[str, "Exception"]] = []
-    return operations, errors
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):  # pylint: disable=unused-argument
+    return create_error_response(HTTPStatus.BAD_REQUEST, str(exc))
 
 
-def convert_file(
-    pt_filename: str,
-    sf_filename: str,
-    discard_names: List[str],
-):
-    loaded = torch.load(pt_filename, map_location="cpu")
-    if "state_dict" in loaded:
-        loaded = loaded["state_dict"]
-    to_removes = _remove_duplicate_names(loaded, discard_names=discard_names)
-
-    metadata = {"format": "pt"}
-    for kept_name, to_remove_group in to_removes.items():
-        for to_remove in to_remove_group:
-            if to_remove not in metadata:
-                metadata[to_remove] = kept_name
-            del loaded[to_remove]
-    # Force tensors to be contiguous
-    loaded = {k: v.contiguous() for k, v in loaded.items()}
-
-    dirname = os.path.dirname(sf_filename)
-    os.makedirs(dirname, exist_ok=True)
-    save_file(loaded, sf_filename, metadata=metadata)
-    check_file_size(sf_filename, pt_filename)
-    reloaded = load_file(sf_filename)
-    for k in loaded:
-        pt_tensor = loaded[k]
-        sf_tensor = reloaded[k]
-        if not torch.equal(pt_tensor, sf_tensor):
-            raise RuntimeError(f"The output tensors do not match for key {k}")
+async def check_model(request) -> Optional[JSONResponse]:
+    if request.model == served_model:
+        return
+    ret = create_error_response(
+        HTTPStatus.NOT_FOUND,
+        f"The model `{request.model}` does not exist.",
+    )
+    return ret
 
 
-def create_diff(pt_infos: Dict[str, List[str]], sf_infos: Dict[str, List[str]]) -> str:
-    errors = []
-    for key in ["missing_keys", "mismatched_keys", "unexpected_keys"]:
-        pt_set = set(pt_infos[key])
-        sf_set = set(sf_infos[key])
+async def check_length(request, input_ids, model_config):
+    if hasattr(model_config.hf_config, "max_sequence_length"):
+        context_len = model_config.hf_config.max_sequence_length
+    elif hasattr(model_config.hf_config, "seq_length"):
+        context_len = model_config.hf_config.seq_length
+    elif hasattr(model_config.hf_config, "max_position_embeddings"):
+        context_len = model_config.hf_config.max_position_embeddings
+    elif hasattr(model_config.hf_config, "seq_length"):
+        context_len = model_config.hf_config.seq_length
+    else:
+        context_len = 4096
 
-        pt_only = pt_set - sf_set
-        sf_only = sf_set - pt_set
+    token_num = len(input_ids)
 
-        if pt_only:
-            errors.append(f"{key} : PT warnings contain {pt_only} which are not present in SF warnings")
-        if sf_only:
-            errors.append(f"{key} : SF warnings contain {sf_only} which are not present in PT warnings")
-    return "\n".join(errors)
-
-
-def previous_pr(api: "HfApi", model_id: str, pr_title: str, revision=Optional[str]) -> Optional["Discussion"]:
-    try:
-        revision_commit = api.model_info(model_id, revision=revision).sha
-        discussions = api.get_repo_discussions(repo_id=model_id)
-    except Exception:
+    if token_num + request.max_tokens > context_len:
+        return create_error_response(
+            HTTPStatus.BAD_REQUEST,
+            f"This model's maximum context length is {context_len} tokens. "
+            f"However, you requested {request.max_tokens + token_num} tokens "
+            f"({token_num} in the messages, "
+            f"{request.max_tokens} in the completion). "
+            f"Please reduce the length of the messages or completion.",
+        )
+    else:
         return None
-    for discussion in discussions:
-        if discussion.status in {"open", "closed"} and discussion.is_pull_request and discussion.title == pr_title:
-            commits = api.list_repo_commits(model_id, revision=discussion.git_reference)
-
-            if revision_commit == commits[1].commit_id:
-                return discussion
-    return None
 
 
-def convert_generic(
-    model_id: str, *, revision=Optional[str], folder: str, filenames: Set[str], token: Optional[str]
-) -> ConversionResult:
-    operations = []
-    errors = []
-
-    extensions = set([".bin", ".ckpt"])
-    for filename in filenames:
-        prefix, ext = os.path.splitext(filename)
-        if ext in extensions:
-            pt_filename = hf_hub_download(
-                model_id, revision=revision, filename=filename, token=token, cache_dir=folder
-            )
-            dirname, raw_filename = os.path.split(filename)
-            if raw_filename == "pytorch_model.bin":
-                # XXX: This is a special case to handle `transformers` and the
-                # `transformers` part of the model which is actually loaded by `transformers`.
-                sf_in_repo = os.path.join(dirname, "model.safetensors")
-            else:
-                sf_in_repo = f"{prefix}.safetensors"
-            sf_filename = os.path.join(folder, sf_in_repo)
-            try:
-                convert_file(pt_filename, sf_filename, discard_names=[])
-                operations.append(CommitOperationAdd(path_in_repo=sf_in_repo, path_or_fileobj=sf_filename))
-            except Exception as e:
-                errors.append((pt_filename, e))
-    return operations, errors
+@app.get("/v1/models")
+async def show_available_models():
+    """Show available models. Right now we only have one model."""
+    model_cards = [
+        ModelCard(id=served_model, root=served_model, permission=[ModelPermission()])
+    ]
+    return ModelList(data=model_cards)
 
 
-def convert(
-    api: "HfApi", model_id: str, revision: Optional[str] = None, force: bool = False
-) -> Tuple["CommitInfo", List[Tuple[str, "Exception"]]]:
-    pr_title = "Adding `safetensors` variant of this model"
-    info = api.model_info(model_id, revision=revision)
-    filenames = set(s.rfilename for s in info.siblings)
+def create_logprobs(
+    token_ids: List[int],
+    id_logprobs: List[Dict[int, float]],
+    initial_text_offset: int = 0,
+) -> LogProbs:
+    """Create OpenAI-style logprobs."""
+    logprobs = LogProbs()
+    last_token_len = 0
+    for token_id, id_logprob in zip(token_ids, id_logprobs):
+        token = tokenizer.convert_ids_to_tokens(token_id)
+        logprobs.tokens.append(token)
+        logprobs.token_logprobs.append(id_logprob[token_id])
+        if len(logprobs.text_offset) == 0:
+            logprobs.text_offset.append(initial_text_offset)
+        else:
+            logprobs.text_offset.append(logprobs.text_offset[-1] + last_token_len)
+        last_token_len = len(token)
 
-    with TemporaryDirectory() as d:
-        folder = os.path.join(d, repo_folder_name(repo_id=model_id, repo_type="models"))
-        os.makedirs(folder)
-        new_pr = None
-        try:
-            operations = None
-            pr = previous_pr(api, model_id, pr_title, revision=revision)
+        logprobs.top_logprobs.append(
+            {tokenizer.convert_ids_to_tokens(i): p for i, p in id_logprob.items()}
+        )
+    return logprobs
 
-            library_name = getattr(info, "library_name", None)
-            if any(filename.endswith(".safetensors") for filename in filenames) and not force:
-                raise AlreadyExists(f"Model {model_id} is already converted, skipping..")
-            elif pr is not None and not force:
-                url = f"https://huggingface.co/{model_id}/discussions/{pr.num}"
-                new_pr = pr
-                raise AlreadyExists(f"Model {model_id} already has an open PR check out {url}")
-            elif library_name == "transformers":
 
-                discard_names = get_discard_names(model_id, revision=revision, folder=folder, token=api.token)
-                if "pytorch_model.bin" in filenames:
-                    operations, errors = convert_single(
-                        model_id, revision=revision, folder=folder, token=api.token, discard_names=discard_names
-                    )
-                elif "pytorch_model.bin.index.json" in filenames:
-                    operations, errors = convert_multi(
-                        model_id, revision=revision, folder=folder, token=api.token, discard_names=discard_names
-                    )
-                else:
-                    raise RuntimeError(f"Model {model_id} doesn't seem to be a valid pytorch model. Cannot convert")
-            else:
-                operations, errors = convert_generic(
-                    model_id, revision=revision, folder=folder, filenames=filenames, token=api.token
-                )
+@app.post("/v1/chat/completions")
+async def create_chat_completion(raw_request: Request):
+    """Completion API similar to OpenAI's API.
+    See  https://platform.openai.com/docs/api-reference/chat/create
+    for the API specification. This API mimics the OpenAI ChatCompletion API.
+    NOTE: Currently we do not support the following features:
+        - logit_bias (to be supported by vLLM engine)
+    """
+    request_json = await raw_request.json()
+    request = ChatCompletionRequest(**request_json)
 
-            if operations:
-                new_pr = api.create_commit(
-                    repo_id=model_id,
-                    revision=revision,
-                    operations=operations,
-                    commit_message=pr_title,
-                    commit_description=COMMIT_DESCRIPTION,
-                    create_pr=True,
-                )
-                print(f"Pr created at {new_pr.pr_url}")
-            else:
-                print("No files to convert")
-        finally:
-            shutil.rmtree(folder)
-        return new_pr, errors
+    logger.info(f"Received chat completion request: {request}")
+
+    error_check_ret = await check_model(request)
+    if error_check_ret is not None:
+        return error_check_ret
+
+    if request.logit_bias is not None:
+        # TODO: support logit_bias in vLLM engine.
+        return create_error_response(
+            HTTPStatus.BAD_REQUEST, "logit_bias is not currently supported"
+        )
+
+    if request.tools:
+        tools = enforce_tool_choice(
+            tool_choice=request.tool_choice, tools=request.tools
+        )
+        tools_or_functions = [item.dict() for item in tools]
+    elif request.functions:
+        tools = None
+        tools_or_functions = [item.dict() for item in request.functions]
+    else:
+        tools = None
+        tools_or_functions = []
+
+    prompt_token_ids = prepare_messages_for_inference(
+        tokenizer=tokenizer,
+        messages=request.messages,
+        functions=request.functions,
+        tools=tools,
+        tool_choice=request.tool_choice,
+    ).tolist()[0]
+
+    # Remove any code_interpreter tools remaining
+    if tools:
+        tools = [tool for tool in tools if tool.type != "code_interpreter"]
+        tools_or_functions = [
+            tool for tool in tools_or_functions if tool["type"] != "code_interpreter"
+        ]
+
+    error_check_ret = await check_length(request, prompt_token_ids, engine_model_config)
+    if error_check_ret is not None:
+        return error_check_ret
+
+    model_name = request.model
+    request_id = f"cmpl-{random_uuid()}"
+    created_time = int(time.time())
+
+    # compute stop_token_ids
+    stop_token_ids = []
+    prompt_template = get_prompt_template_from_tokenizer(tokenizer)
+    for stop_tok in prompt_template.get_stop_tokens_for_generation():
+        tok_ids = tokenizer.encode(stop_tok, add_special_tokens=False)
+        stop_token_ids.append(tok_ids[-1])
+
+    try:
+        sampling_params = SamplingParams(
+            n=request.n,
+            presence_penalty=request.presence_penalty,
+            frequency_penalty=request.frequency_penalty,
+            temperature=request.temperature,
+            top_p=request.top_p,
+            stop=request.stop,
+            stop_token_ids=stop_token_ids,
+            max_tokens=request.max_tokens,
+            best_of=request.best_of,
+            top_k=request.top_k,
+            ignore_eos=request.ignore_eos,
+            use_beam_search=request.use_beam_search,
+            skip_special_tokens=False,
+            logprobs=len(tokenizer.vocab.keys()),
+        )
+    except ValueError as e:
+        return create_error_response(HTTPStatus.BAD_REQUEST, str(e))
+
+    if args.grammar_sampling:
+        result_generator = engine.generate(
+            prompt=None,
+            sampling_params=sampling_params,
+            request_id=request_id,
+            prompt_token_ids=prompt_token_ids,
+            tools_or_functions=tools_or_functions,
+            prompt_template_cls=prompt_template,
+            tool_choice=request.tool_choice,
+        )
+    else:
+        result_generator = engine.generate(
+            prompt=None,
+            sampling_params=sampling_params,
+            request_id=request_id,
+            prompt_token_ids=prompt_token_ids,
+        )
+
+    async def abort_request() -> None:
+        await engine.abort(request_id)
+
+    async def wrap_vllm_generator(
+        tool_choice,
+    ) -> AsyncGenerator[Tuple[str, Optional[str]], None]:
+        previous_texts = ""
+        async for res in result_generator:
+            for output in res.outputs:
+                delta_text = output.text[len(previous_texts) :]
+                previous_texts = output.text
+                finish_reason = output.finish_reason
+                if (
+                    delta_text.strip()
+                    not in prompt_template.get_stop_tokens_for_generation()
+                ):
+                    # This part checks if delta_text is the first token and tool_choice is provided by user
+                    # If so, it yields the prefix containing the tool_choice name first
+                    if (
+                        previous_texts == delta_text
+                        and delta_text in prompt_template.fn_param_sep_token
+                    ):
+                        if tool_choice == "none":
+                            yield prompt_template.get_predefined_function_names(
+                                function_types=PredefinedFuncTypes.no_tool_call
+                            )[
+                                0
+                            ] + prompt_template.get_stop_token_for_function_parameter(
+                                stage="function"
+                            ), finish_reason
+                        elif isinstance(tool_choice, Tool):
+                            yield tool_choice.function.name + prompt_template.get_stop_token_for_function_parameter(
+                                stage="function"
+                            ), finish_reason
+                    yield delta_text, finish_reason
+        yield "", "stop"
+
+    async def completion_stream_generator(
+        tool_choice, functions
+    ) -> AsyncGenerator[str, None]:
+        generator = wrap_vllm_generator(tool_choice=tool_choice)
+        async for response in generate_openai_format_from_stream_async(
+            generator, prompt_template
+        ):
+            # Convert v1 from function_call to tool_calls if tools are provided instead of functions
+            if prompt_template.version == "v1" and (
+                functions is None or len(functions) == 0
+            ):
+                if "function_call" in response["delta"]:
+                    response["delta"] = {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "function": response["delta"]["function_call"],
+                                "id": get_random_tool_call_id(),
+                                "type": "function",
+                            }
+                        ],
+                    }
+                if response["finish_reason"] == "function_call":
+                    response["finish_reason"] = "tool_calls"
+            chunk = StreamChoice(**response)
+            result = ChatCompletionChunk(id=request_id, choices=[chunk])
+            chunk_dic = result.dict(exclude_unset=True)
+            chunk_data = json.dumps(chunk_dic, ensure_ascii=False)
+            yield f"data: {chunk_data}\n\n"
+        yield "data: [DONE]\n\n"
+
+    # Streaming response
+    if request.stream:
+        background_tasks = BackgroundTasks()
+        # Abort the request if the client disconnects.
+        background_tasks.add_task(abort_request)
+        return StreamingResponse(
+            completion_stream_generator(
+                tool_choice=request.tool_choice, functions=request.functions
+            ),
+            media_type="text/event-stream",
+            background=background_tasks,
+        )
+
+    # Non-streaming response
+    final_res: RequestOutput = None
+    async for res in result_generator:
+        if await raw_request.is_disconnected():
+            # Abort the request if the client disconnects.
+            await abort_request()
+            return create_error_response(HTTPStatus.BAD_REQUEST, "Client disconnected")
+        final_res = res
+    assert final_res is not None
+    choices = []
+    for output in final_res.outputs:
+        text_response = output.text.strip()
+        chat_mess = prompt_template.parse_assistant_response(
+            llm_output=text_response, tool_choice=request.tool_choice
+        )  # parse_generated_content(text_response)
+
+        # Postprocess finish reason
+        if "function_call" in chat_mess and chat_mess["function_call"] is not None:
+            output.finish_reason = "function_call"
+        if "tool_calls" in chat_mess and chat_mess["tool_calls"] is not None:
+            output.finish_reason = "tool_calls"
+
+        # Convert v1 from function_call to tool_calls if tools are provided instead of functions
+        if (
+            prompt_template.version == "v1"
+            and output.finish_reason == "function_call"
+            and (request.functions is None or len(request.functions) == 0)
+        ):
+            chat_mess = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "function": {
+                            "name": chat_mess["function_call"]["name"],
+                            "arguments": chat_mess["function_call"]["arguments"],
+                        },
+                        "id": get_random_tool_call_id(),
+                        "type": "function",
+                    }
+                ],
+            }
+            output.finish_reason = "tool_calls"
+
+        choice_data = ChatCompletionResponseChoice(
+            index=output.index,
+            message=ChatMessage(**chat_mess),
+            finish_reason=output.finish_reason,
+        )
+        choices.append(choice_data)
+
+    num_prompt_tokens = len(final_res.prompt_token_ids)
+    num_generated_tokens = sum(len(output.token_ids) for output in final_res.outputs)
+    usage = UsageInfo(
+        prompt_tokens=num_prompt_tokens,
+        completion_tokens=num_generated_tokens,
+        total_tokens=num_prompt_tokens + num_generated_tokens,
+    )
+    response = ChatCompletionResponse(
+        id=request_id,
+        created=created_time,
+        model=model_name,
+        choices=choices,
+        usage=usage,
+    )
+
+    if request.stream:
+        # When user requests streaming but we don't stream, we still need to
+        # return a streaming response with a single event.
+        response_json = response.model_dump_json(exclude_unset=True)
+
+        async def fake_stream_generator() -> AsyncGenerator[str, None]:
+            yield f"data: {response_json}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            fake_stream_generator(), media_type="text/event-stream"
+        )
+
+    return response
 
 
 if __name__ == "__main__":
-    DESCRIPTION = """
-    Simple utility tool to convert automatically some weights on the hub to `safetensors` format.
-    It is PyTorch exclusive for now.
-    It works by downloading the weights (PT), converting them locally, and uploading them back
-    as a PR on the hub.
-    """
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser = argparse.ArgumentParser(
+        description="vLLM OpenAI-Compatible RESTful API server."
+    )
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="host name")
+    parser.add_argument("--port", type=int, default=8000, help="port number")
     parser.add_argument(
-        "model_id",
+        "--allow-credentials", action="store_true", help="allow credentials"
+    )
+    parser.add_argument(
+        "--allowed-origins", type=json.loads, default=["*"], help="allowed origins"
+    )
+    parser.add_argument(
+        "--allowed-methods", type=json.loads, default=["*"], help="allowed methods"
+    )
+    parser.add_argument(
+        "--allowed-headers", type=json.loads, default=["*"], help="allowed headers"
+    )
+    parser.add_argument(
+        "--served-model-name",
         type=str,
-        help="The name of the model on the hub to convert. E.g. `gpt2` or `facebook/wav2vec2-base-960h`",
+        default=None,
+        help="The model name used in the API. If not "
+        "specified, the model name will be the same as "
+        "the huggingface name.",
     )
     parser.add_argument(
-        "--revision",
-        type=str,
-        help="The revision to convert",
+        "--grammar-sampling",
+        type=bool,
+        default=True,
+        help="enable/disable grammar sampling for function names",
     )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Create the PR even if it already exists of if the model was already converted.",
-    )
-    parser.add_argument(
-        "-y",
-        action="store_true",
-        help="Ignore safety prompt",
-    )
+
+    parser = AsyncEngineArgs.add_cli_args(parser)
     args = parser.parse_args()
-    model_id = args.model_id
-    api = HfApi()
-    if args.y:
-        txt = "y"
+
+    pattern = r"v1.*$"
+    if re.search(pattern, args.model):
+        args.grammar_sampling = False
+
+    if args.grammar_sampling:
+        from functionary.vllm_monkey_patch.async_llm_engine import AsyncLLMEngine
     else:
-        txt = input(
-            "This conversion script will unpickle a pickled file, which is inherently unsafe. If you do not trust this file, we invite you to use"
-            " https://huggingface.co/spaces/safetensors/convert or google colab or other hosted solution to avoid potential issues with this file."
-            " Continue [Y/n] ?"
-        )
-    if txt.lower() in {"", "y"}:
-        commit_info, errors = convert(api, model_id, revision=args.revision, force=args.force)
-        string = f"""
-### Success 🔥
-Yay! This model was successfully converted and a PR was open using your token, here:
-[{commit_info.pr_url}]({commit_info.pr_url})
-        """
-        if errors:
-            string += "\nErrors during conversion:\n"
-            string += "\n".join(
-                f"Error while converting {filename}: {e}, skipped conversion" for filename, e in errors
-            )
-        print(string)
+        from vllm.engine.async_llm_engine import AsyncLLMEngine
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=args.allowed_origins,
+        allow_credentials=args.allow_credentials,
+        allow_methods=args.allowed_methods,
+        allow_headers=args.allowed_headers,
+    )
+
+    logger.info(f"args: {args}")
+
+    if args.served_model_name is not None:
+        served_model = args.served_model_name
     else:
-        print(f"Answer was `{txt}` aborting.")
+        served_model = args.model
+
+    engine_args = AsyncEngineArgs.from_cli_args(args)
+    engine = AsyncLLMEngine.from_engine_args(engine_args)
+    engine_model_config = asyncio.run(engine.get_model_config())
+
+    # A separate tokenizer to map token IDs to strings.
+    tokenizer = get_tokenizer(
+        engine_args.tokenizer, tokenizer_mode=engine_args.tokenizer_mode
+    )
+
+    uvicorn.run(
+        app,
+        host=args.host,
+        # port=args.port,
+        port=8000,
+        log_level="info",
+        timeout_keep_alive=TIMEOUT_KEEP_ALIVE,
+    )
+
+    os.environ["OPENAI_API_URL"] = "[::]:8000/v1/"
+    os.environ["OPENAI_API_KEY"] = "sk-"
+    os.environ["AZURE_COGS_KEY"] = "84dc27487e56469fa2418163c4e062ad"
+    os.environ["AZURE_COGS_ENDPOINT"] = (
+        "https://siguiente-multi-modal.cognitiveservices.azure.com/"
+    )
+    os.environ["AZURE_COGS_REGION"] = "southcentralus"
+    os.environ["TAVILY_API_KEY"] = "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"
+
+    from langchain.agents import AgentType, initialize_agent
+    from langchain.tools.render import format_tool_to_openai_function
+    from langchain_community.agent_toolkits import AzureCognitiveServicesToolkit
+    from langchain_community.tools.tavily_search import TavilySearchResults
+    from langchain_openai import OpenAI
+    from langgraph.prebuilt import ToolExecutor
+
+    openai = OpenAI(base_url="[::]:8000", model=args.served_model_name, streaming=True)
+    toolkit = AzureCognitiveServicesToolkit()
+    tools = toolkit.get_tools().append(TavilySearchResults(max_results=10))
+    agent = initialize_agent(
+        tools,
+        llm=openai,
+        agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
+        agent_type=AgentType.OPENAI_FUNCTIONS,
+        verbose=True,
+    )
+
+    functions = [format_tool_to_openai_function(t) for t in tools]
+    model = openai.bind(functions)
+    tool_executor = ToolExecutor(tools)
+
